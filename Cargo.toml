@@ -1,12 +1,24 @@
 [package]
 name = "ratatui_ffi"
-version = "0.0.1"
+version = "0.1.0"
 edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "C ABI bindings for Ratatui (Rust TUI) to consume from C/C#/etc."
+repository = "https://github.com/holo-q/ratatui-ffi"
+homepage = "https://github.com/holo-q/ratatui-ffi"
+readme = "README.md"
+keywords = ["tui", "terminal", "ffi", "c", "bindings"]
+categories = ["api-bindings", "command-line-interface", "gui"]
 
 [lib]
 crate-type = ["cdylib"]
 
+[features]
+default = [ ]
+# Enable experimental Scrollbar support (requires newer Ratatui API). Off by default for crates.io compatibility.
+scrollbar = []
+
 [dependencies]
-ratatui = { path = "../../ratatui/ratatui" }
+ratatui = "0.29"
 crossterm = "0.27"
 bitflags = "2"
