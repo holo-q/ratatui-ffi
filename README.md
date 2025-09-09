@@ -1,8 +1,10 @@
 # ratatui_ffi
 
 ![CI](https://github.com/holo-q/ratatui-ffi/actions/workflows/ci.yml/badge.svg)
+[![GitHub Release](https://img.shields.io/github/v/release/holo-q/ratatui-ffi?logo=github)](https://github.com/holo-q/ratatui-ffi/releases)
 [![crates.io](https://img.shields.io/crates/v/ratatui_ffi.svg?logo=rust&label=crates.io)](https://crates.io/crates/ratatui_ffi)
 [![crates.io downloads](https://img.shields.io/crates/d/ratatui_ffi.svg?logo=rust)](https://crates.io/crates/ratatui_ffi)
+[![docs.rs](https://img.shields.io/docsrs/ratatui_ffi?logo=rust)](https://docs.rs/ratatui_ffi)
 
 Native C ABI for [Ratatui], exposing a small cdylib you can consume from C, C#, and other languages.
 
