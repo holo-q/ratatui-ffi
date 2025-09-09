@@ -10,6 +10,7 @@ use crossterm::terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScree
 use crossterm::event::{self, Event as CtEvent, KeyEvent as CtKeyEvent, KeyCode as CtKeyCode, KeyModifiers as CtKeyModifiers, MouseEvent as CtMouseEvent, MouseEventKind as CtMouseKind, MouseButton as CtMouseButton};
 use std::collections::VecDeque;
 use std::sync::Mutex;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Rect, Constraint};
 use ratatui::buffer::Buffer;
@@ -25,10 +26,15 @@ pub struct FfiTerminal {
     terminal: Terminal<CrosstermBackend<Stdout>>,
 }
 
+#[repr(u32)]
+pub enum FfiAlign { Left = 0, Center = 1, Right = 2 }
+
 #[repr(C)]
 pub struct FfiParagraph {
     lines: Vec<Line<'static>>,          // content
     block: Option<Block<'static>>,      // optional block with borders/title
+    align: u32,                         // FfiAlign
+    wrap_trim: bool,                    // Wrap { trim }
 }
 
 #[repr(C)]
@@ -56,7 +62,7 @@ pub struct FfiSparkline { values: Vec<u64>, block: Option<Block<'static>> }
 pub struct FfiChartDataset { name: String, points: Vec<(f64,f64)>, style: Option<Style> }
 
 #[repr(C)]
-pub struct FfiChart { datasets: Vec<FfiChartDataset>, x_title: Option<String>, y_title: Option<String>, block: Option<Block<'static>> }
+pub struct FfiChart { datasets: Vec<FfiChartDataset>, x_title: Option<String>, y_title: Option<String>, block: Option<Block<'static>>, x_bounds: Option<(f64,f64)>, y_bounds: Option<(f64,f64)> }
 
 #[cfg(feature = "scrollbar")]
 #[cfg_attr(docsrs, doc(cfg(feature = "scrollbar")))]
@@ -70,6 +76,19 @@ pub struct FfiScrollbar { orient: u32, position: u16, content_len: u16, viewport
 
 #[repr(C)]
 pub struct FfiRect { pub x: u16, pub y: u16, pub width: u16, pub height: u16 }
+
+// ----- Versioning (ABI/API) -----
+
+#[repr(C)]
+pub struct FfiVersion { pub abi: u32, pub api_major: u16, pub api_minor: u16, pub api_patch: u16 }
+
+const ABI_VERSION: u32 = 1;
+const API_VERSION: (u16, u16, u16) = (0, 1, 4);
+
+#[no_mangle]
+pub extern "C" fn ratatui_ffi_version() -> FfiVersion {
+    FfiVersion { abi: ABI_VERSION, api_major: API_VERSION.0, api_minor: API_VERSION.1, api_patch: API_VERSION.2 }
+}
 
 #[repr(u32)]
 pub enum FfiEventKind { None = 0, Key = 1, Resize = 2, Mouse = 3 }
@@ -129,41 +148,46 @@ pub enum FfiMouseButton { Left = 1, Right = 2, Middle = 3, None = 0 }
 
 #[no_mangle]
 pub extern "C" fn ratatui_init_terminal() -> *mut FfiTerminal {
-    let mut out = stdout();
-    // Best-effort: try raw mode and alternate screen, but don't fail hard if not available.
-    let _ = enable_raw_mode();
-    let _ = execute!(out, EnterAlternateScreen);
-    let backend = CrosstermBackend::new(out);
-    match Terminal::new(backend) {
-        Ok(terminal) => Box::into_raw(Box::new(FfiTerminal { terminal })),
-        Err(_) => {
-            let _ = disable_raw_mode();
-            ptr::null_mut()
+    match catch_unwind(AssertUnwindSafe(|| {
+        let mut out = stdout();
+        // Best-effort: try raw mode and alternate screen, but don't fail hard if not available.
+        let _ = enable_raw_mode();
+        let _ = execute!(out, EnterAlternateScreen);
+        let backend = CrosstermBackend::new(out);
+        match Terminal::new(backend) {
+            Ok(terminal) => Box::into_raw(Box::new(FfiTerminal { terminal })),
+            Err(_) => {
+                let _ = disable_raw_mode();
+                ptr::null_mut()
+            }
         }
+    })) {
+        Ok(ptr) => ptr,
+        Err(_) => ptr::null_mut(),
     }
 }
 
 #[no_mangle]
 pub extern "C" fn ratatui_terminal_clear(term: *mut FfiTerminal) {
-    if term.is_null() {
-        return;
-    }
-    let t = unsafe { &mut *term };
-    let _ = t.terminal.clear();
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        if term.is_null() { return; }
+        let t = unsafe { &mut *term };
+        let _ = t.terminal.clear();
+    }));
 }
 
 #[no_mangle]
 pub extern "C" fn ratatui_terminal_free(term: *mut FfiTerminal) {
-    if term.is_null() {
-        return;
-    }
-    // Take ownership and drop after restoring terminal state
-    let mut boxed = unsafe { Box::from_raw(term) };
-    let _ = boxed.terminal.show_cursor();
-    // Leave alternate screen and disable raw mode
-    let _ = execute!(stdout(), LeaveAlternateScreen);
-    let _ = disable_raw_mode();
-    // Drop happens here
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        if term.is_null() { return; }
+        // Take ownership and drop after restoring terminal state
+        let mut boxed = unsafe { Box::from_raw(term) };
+        let _ = boxed.terminal.show_cursor();
+        // Leave alternate screen and disable raw mode
+        let _ = execute!(stdout(), LeaveAlternateScreen);
+        let _ = disable_raw_mode();
+        // Drop happens here
+    }));
 }
 
 #[no_mangle]
@@ -180,7 +204,7 @@ pub extern "C" fn ratatui_paragraph_new(text_utf8: *const c_char) -> *mut FfiPar
     for l in text.split('\n') {
         lines.push(Line::from(Span::raw(l.to_string())));
     }
-    Box::into_raw(Box::new(FfiParagraph { lines, block: None }))
+    Box::into_raw(Box::new(FfiParagraph { lines, block: None, align: FfiAlign::Left as u32, wrap_trim: true }))
 }
 
 #[no_mangle]
@@ -201,6 +225,20 @@ pub extern "C" fn ratatui_paragraph_set_block_title(
         }
     }
     p.block = Some(block);
+}
+
+#[no_mangle]
+pub extern "C" fn ratatui_paragraph_set_alignment(para: *mut FfiParagraph, align: u32) {
+    if para.is_null() { return; }
+    let p = unsafe { &mut *para };
+    p.align = align;
+}
+
+#[no_mangle]
+pub extern "C" fn ratatui_paragraph_set_wrap(para: *mut FfiParagraph, trim: bool) {
+    if para.is_null() { return; }
+    let p = unsafe { &mut *para };
+    p.wrap_trim = trim;
 }
 
 #[no_mangle]
@@ -300,6 +338,14 @@ pub extern "C" fn ratatui_terminal_draw_paragraph(
     let p = unsafe { &*para };
     let lines = p.lines.clone();
     let mut widget = Paragraph::new(lines);
+    // apply align
+    widget = match p.align {
+        x if x == FfiAlign::Center as u32 => widget.alignment(ratatui::layout::Alignment::Center),
+        x if x == FfiAlign::Right as u32 => widget.alignment(ratatui::layout::Alignment::Right),
+        _ => widget.alignment(ratatui::layout::Alignment::Left),
+    };
+    // apply wrap
+    widget = widget.wrap(ratatui::widgets::Wrap { trim: p.wrap_trim });
     if let Some(b) = &p.block { widget = widget.block(b.clone()); }
     let res = t.terminal.draw(|frame| {
         let area: Rect = frame.size();
@@ -320,6 +366,12 @@ pub extern "C" fn ratatui_terminal_draw_paragraph_in(
     let area = Rect { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
     let lines = p.lines.clone();
     let mut widget = Paragraph::new(lines);
+    widget = match p.align {
+        x if x == FfiAlign::Center as u32 => widget.alignment(ratatui::layout::Alignment::Center),
+        x if x == FfiAlign::Right as u32 => widget.alignment(ratatui::layout::Alignment::Right),
+        _ => widget.alignment(ratatui::layout::Alignment::Left),
+    };
+    widget = widget.wrap(ratatui::widgets::Wrap { trim: p.wrap_trim });
     if let Some(b) = &p.block { widget = widget.block(b.clone()); }
     let res = t.terminal.draw(|frame| {
         frame.render_widget(widget.clone(), area);
@@ -347,6 +399,12 @@ pub extern "C" fn ratatui_headless_render_paragraph(
     let area = Rect { x: 0, y: 0, width, height };
     let mut buf = Buffer::empty(area);
     let mut widget = Paragraph::new(p.lines.clone());
+    widget = match p.align {
+        x if x == FfiAlign::Center as u32 => widget.alignment(ratatui::layout::Alignment::Center),
+        x if x == FfiAlign::Right as u32 => widget.alignment(ratatui::layout::Alignment::Right),
+        _ => widget.alignment(ratatui::layout::Alignment::Left),
+    };
+    widget = widget.wrap(ratatui::widgets::Wrap { trim: p.wrap_trim });
     if let Some(b) = &p.block { widget = widget.block(b.clone()); }
     ratatui::widgets::Widget::render(widget, area, &mut buf);
 
@@ -559,27 +617,30 @@ pub extern "C" fn ratatui_headless_render_frame(
     len: usize,
     out_text_utf8: *mut *mut c_char,
 ) -> bool {
-    if cmds.is_null() || out_text_utf8.is_null() { return false; }
-    let area = Rect { x: 0, y: 0, width, height };
-    let mut buf = Buffer::empty(area);
-    let slice = unsafe { std::slice::from_raw_parts(cmds, len) };
-    for cmd in slice.iter() { render_cmd_to_buffer(cmd, &mut buf); }
-    let mut s = String::new();
-    for y in 0..height { for x in 0..width { let cell = buf.get(x, y); s.push_str(cell.symbol()); } if y + 1 < height { s.push('\n'); } }
-    match CString::new(s) { Ok(cstr) => { unsafe { *out_text_utf8 = cstr.into_raw(); } true }, Err(_) => false }
+    match catch_unwind(AssertUnwindSafe(|| {
+        if cmds.is_null() || out_text_utf8.is_null() { return false; }
+        let area = Rect { x: 0, y: 0, width, height };
+        let mut buf = Buffer::empty(area);
+        let slice = unsafe { std::slice::from_raw_parts(cmds, len) };
+        for cmd in slice.iter() { render_cmd_to_buffer(cmd, &mut buf); }
+        let mut s = String::new();
+        for y in 0..height { for x in 0..width { let cell = buf.get(x, y); s.push_str(cell.symbol()); } if y + 1 < height { s.push('\n'); } }
+        match CString::new(s) { Ok(cstr) => { unsafe { *out_text_utf8 = cstr.into_raw(); } true }, Err(_) => false }
+    })) { Ok(b) => b, Err(_) => false }
 }
 
 // ----- Batched terminal frame drawing -----
 
 #[no_mangle]
 pub extern "C" fn ratatui_terminal_draw_frame(term: *mut FfiTerminal, cmds: *const FfiDrawCmd, len: usize) -> bool {
-    if term.is_null() || cmds.is_null() { return false; }
-    let t = unsafe { &mut *term };
-    let slice = unsafe { std::slice::from_raw_parts(cmds, len) };
-    let res = t.terminal.draw(|frame| {
-        for cmd in slice.iter() {
-            let area = Rect { x: cmd.rect.x, y: cmd.rect.y, width: cmd.rect.width, height: cmd.rect.height };
-            match cmd.kind {
+    match catch_unwind(AssertUnwindSafe(|| {
+        if term.is_null() || cmds.is_null() { return false; }
+        let t = unsafe { &mut *term };
+        let slice = unsafe { std::slice::from_raw_parts(cmds, len) };
+        let res = t.terminal.draw(|frame| {
+            for cmd in slice.iter() {
+                let area = Rect { x: cmd.rect.x, y: cmd.rect.y, width: cmd.rect.width, height: cmd.rect.height };
+                match cmd.kind {
                 x if x == FfiWidgetKind::Paragraph as u32 => {
                     if cmd.handle.is_null() { continue; }
                     let p = unsafe { &*(cmd.handle as *const FfiParagraph) };
@@ -665,10 +726,11 @@ pub extern "C" fn ratatui_terminal_draw_frame(term: *mut FfiTerminal, cmds: *con
                     frame.render_stateful_widget(w, area, &mut state);
                 }
                 _ => {}
+                }
             }
-        }
-    });
-    res.is_ok()
+        });
+        res.is_ok()
+    })) { Ok(b) => b, Err(_) => false }
 }
 
 // ----- Event injection (for automation) -----
@@ -991,7 +1053,7 @@ pub extern "C" fn ratatui_headless_render_barchart(width: u16, height: u16, b: *
 
 #[no_mangle]
 pub extern "C" fn ratatui_chart_new() -> *mut FfiChart {
-    Box::into_raw(Box::new(FfiChart { datasets: Vec::new(), x_title: None, y_title: None, block: None }))
+    Box::into_raw(Box::new(FfiChart { datasets: Vec::new(), x_title: None, y_title: None, block: None, x_bounds: None, y_bounds: None }))
 }
 
 #[no_mangle]
@@ -1023,6 +1085,14 @@ pub extern "C" fn ratatui_chart_set_axes_titles(c: *mut FfiChart, x_utf8: *const
 }
 
 #[no_mangle]
+pub extern "C" fn ratatui_chart_set_axes_bounds(c: *mut FfiChart, x_min: f64, x_max: f64, y_min: f64, y_max: f64) {
+    if c.is_null() { return; }
+    let ch = unsafe { &mut *c };
+    ch.x_bounds = Some((x_min, x_max));
+    ch.y_bounds = Some((y_min, y_max));
+}
+
+#[no_mangle]
 pub extern "C" fn ratatui_chart_set_block_title(c: *mut FfiChart, title_utf8: *const c_char, show_border: bool) {
     if c.is_null() { return; }
     let ch = unsafe { &mut *c };
@@ -1051,7 +1121,9 @@ pub extern "C" fn ratatui_terminal_draw_chart_in(term: *mut FfiTerminal, c: *con
     let mut x_axis = RtAxis::default();
     let mut y_axis = RtAxis::default();
     if let Some(ti) = &ch.x_title { x_axis = x_axis.title(ti.clone()); }
+    if let Some(b) = ch.x_bounds { x_axis = x_axis.bounds([b.0, b.1]); }
     if let Some(ti) = &ch.y_title { y_axis = y_axis.title(ti.clone()); }
+    if let Some(b) = ch.y_bounds { y_axis = y_axis.bounds([b.0, b.1]); }
     w = w.x_axis(x_axis).y_axis(y_axis);
     if let Some(b) = &ch.block { w = w.block(b.clone()); }
     let res = t.terminal.draw(|frame| { frame.render_widget(w.clone(), area); });
@@ -1075,7 +1147,9 @@ pub extern "C" fn ratatui_headless_render_chart(width: u16, height: u16, c: *con
     let mut x_axis = RtAxis::default();
     let mut y_axis = RtAxis::default();
     if let Some(ti) = &ch.x_title { x_axis = x_axis.title(ti.clone()); }
+    if let Some(b) = ch.x_bounds { x_axis = x_axis.bounds([b.0, b.1]); }
     if let Some(ti) = &ch.y_title { y_axis = y_axis.title(ti.clone()); }
+    if let Some(b) = ch.y_bounds { y_axis = y_axis.bounds([b.0, b.1]); }
     w = w.x_axis(x_axis).y_axis(y_axis);
     if let Some(b) = &ch.block { w = w.block(b.clone()); }
     ratatui::widgets::Widget::render(w, area, &mut buf);
@@ -1203,6 +1277,8 @@ pub extern "C" fn ratatui_headless_render_scrollbar(width: u16, height: u16, s: 
 
 #[repr(C)]
 pub struct FfiTable { headers: Vec<String>, rows: Vec<Vec<String>>, block: Option<Block<'static>>, selected: Option<usize>, row_highlight_style: Option<Style>, highlight_symbol: Option<String> }
+// Column width constraints (percentage) set via API; simple global for now
+static mut TABLE_WIDTHS: Option<Vec<Constraint>> = None;
 
 #[no_mangle]
 pub extern "C" fn ratatui_table_new() -> *mut FfiTable {
@@ -1223,6 +1299,14 @@ pub extern "C" fn ratatui_table_set_headers(tbl: *mut FfiTable, tsv_utf8: *const
     if let Ok(s) = c_str.to_str() {
         t.headers = s.split('\t').map(|x| x.to_string()).collect();
     }
+}
+
+#[no_mangle]
+pub extern "C" fn ratatui_table_set_column_percents(_tbl: *mut FfiTable, values: *const u16, len: usize) {
+    if values.is_null() { return; }
+    let slice = unsafe { std::slice::from_raw_parts(values, len) };
+    let widths: Vec<Constraint> = slice.iter().map(|p| Constraint::Percentage(*p)).collect();
+    unsafe { TABLE_WIDTHS = Some(widths); }
 }
 
 #[no_mangle]
@@ -1271,10 +1355,11 @@ pub extern "C" fn ratatui_table_set_highlight_symbol(tbl: *mut FfiTable, sym_utf
 
 #[no_mangle]
 pub extern "C" fn ratatui_terminal_draw_table_in(term: *mut FfiTerminal, tbl: *const FfiTable, rect: FfiRect) -> bool {
-    if term.is_null() || tbl.is_null() { return false; }
-    let t = unsafe { &mut *term };
-    let tb = unsafe { &*tbl };
-    let area = Rect { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    return match catch_unwind(AssertUnwindSafe(|| {
+        if term.is_null() || tbl.is_null() { return false; }
+        let t = unsafe { &mut *term };
+        let tb = unsafe { &*tbl };
+        let area = Rect { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
 
     let header_row = if tb.headers.is_empty() { None } else {
         let cells: Vec<Cell> = tb.headers.iter().map(|h| Cell::from(h.clone())).collect();
@@ -1282,17 +1367,20 @@ pub extern "C" fn ratatui_terminal_draw_table_in(term: *mut FfiTerminal, tbl: *c
     };
     let rows: Vec<Row> = tb.rows.iter().map(|r| Row::new(r.iter().map(|c| Cell::from(c.clone())).collect::<Vec<_>>())).collect();
 
-    // Even column widths
+    // Column widths
     let col_count = if !tb.rows.is_empty() { tb.rows.iter().map(|r| r.len()).max().unwrap_or(1) } else { tb.headers.len().max(1) };
-    let widths = std::iter::repeat(Constraint::Percentage( (100 / col_count.max(1)) as u16 )).take(col_count.max(1));
+    let widths_vec: Vec<Constraint> = unsafe {
+        if let Some(w) = &TABLE_WIDTHS { if !w.is_empty() { w.clone() } else { Vec::new() } } else { Vec::new() }
+    };
+    let widths_final: Vec<Constraint> = if widths_vec.is_empty() { std::iter::repeat(Constraint::Percentage((100 / col_count.max(1)) as u16)).take(col_count.max(1)).collect() } else { widths_vec };
 
-    let mut widget = Table::new(rows, widths);
+    let mut widget = Table::new(rows, widths_final);
     if let Some(hr) = header_row { widget = widget.header(hr); }
     if let Some(b) = &tb.block { widget = widget.block(b.clone()); }
     if let Some(sty) = &tb.row_highlight_style { widget = widget.row_highlight_style(sty.clone()); }
     if let Some(sym) = &tb.highlight_symbol { widget = widget.highlight_symbol(sym.clone()); }
 
-    let res = t.terminal.draw(|frame| {
+        let res = t.terminal.draw(|frame| {
         if let Some(sel) = tb.selected {
             let mut state = ratatui::widgets::TableState::default();
             state.select(Some(sel));
@@ -1301,7 +1389,8 @@ pub extern "C" fn ratatui_terminal_draw_table_in(term: *mut FfiTerminal, tbl: *c
             frame.render_widget(widget.clone(), area);
         }
     });
-    res.is_ok()
+        res.is_ok()
+    })) { Ok(b) => b, Err(_) => false };
 }
 
 #[no_mangle]
