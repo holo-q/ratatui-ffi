@@ -22,3 +22,9 @@ scrollbar = []
 ratatui = "0.29"
 crossterm = "0.27"
 bitflags = "2"
+
+[package.metadata.docs.rs]
+# Build docs with all features so optional APIs are visible.
+all-features = true
+# Enable `docsrs` cfg so `#[cfg_attr(docsrs, ...)]` works and feature badges render.
+rustdoc-args = ["--cfg", "docsrs"]

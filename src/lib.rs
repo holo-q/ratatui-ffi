@@ -1,3 +1,6 @@
+#![doc = include_str!("../README.md")]
+#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
+
 use std::ffi::{c_char, CStr, CString};
 use std::io::{stdout, Stdout};
 use std::ptr;
@@ -12,8 +15,9 @@ use ratatui::layout::{Rect, Constraint};
 use ratatui::buffer::Buffer;
 use ratatui::prelude::*;
 use ratatui::style::{Color, Modifier, Style};
-use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph, Table, Row, Cell, Gauge, Tabs, BarChart as RtBarChart, Sparkline as RtSparkline};
+use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph, Table, Row, Cell, Gauge, Tabs, BarChart as RtBarChart, Sparkline as RtSparkline, Chart as RtChart, Dataset as RtDataset, Axis as RtAxis, GraphType as RtGraphType};
 #[cfg(feature = "scrollbar")]
+#[cfg_attr(docsrs, doc(cfg(feature = "scrollbar")))]
 use ratatui::widgets::{Scrollbar as RtScrollbar, ScrollbarState as RtScrollbarState};
 
 #[repr(C)]
@@ -48,11 +52,19 @@ pub struct FfiBarChart { values: Vec<u64>, labels: Vec<String>, block: Option<Bl
 #[repr(C)]
 pub struct FfiSparkline { values: Vec<u64>, block: Option<Block<'static>> }
 
+#[repr(C)]
+pub struct FfiChartDataset { name: String, points: Vec<(f64,f64)>, style: Option<Style> }
+
+#[repr(C)]
+pub struct FfiChart { datasets: Vec<FfiChartDataset>, x_title: Option<String>, y_title: Option<String>, block: Option<Block<'static>> }
+
 #[cfg(feature = "scrollbar")]
+#[cfg_attr(docsrs, doc(cfg(feature = "scrollbar")))]
 #[repr(u32)]
 pub enum FfiScrollbarOrient { Vertical = 0, Horizontal = 1 }
 
 #[cfg(feature = "scrollbar")]
+#[cfg_attr(docsrs, doc(cfg(feature = "scrollbar")))]
 #[repr(C)]
 pub struct FfiScrollbar { orient: u32, position: u16, content_len: u16, viewport_len: u16, block: Option<Block<'static>> }
 
@@ -419,7 +431,19 @@ pub extern "C" fn ratatui_headless_render_table(
 }
 
 #[repr(u32)]
-pub enum FfiWidgetKind { Paragraph = 1, List = 2, Table = 3, Gauge = 4, Tabs = 5, BarChart = 6, Sparkline = 7, #[cfg(feature = "scrollbar")] Scrollbar = 8 }
+pub enum FfiWidgetKind {
+    Paragraph = 1,
+    List = 2,
+    Table = 3,
+    Gauge = 4,
+    Tabs = 5,
+    BarChart = 6,
+    Sparkline = 7,
+    Chart = 8,
+    #[cfg_attr(docsrs, doc(cfg(feature = "scrollbar")))]
+    #[cfg(feature = "scrollbar")] 
+    Scrollbar = 9,
+}
 // extend kinds for new widgets
 
 #[repr(C)]
@@ -495,6 +519,32 @@ fn render_cmd_to_buffer(cmd: &FfiDrawCmd, buf: &mut Buffer) {
             let orient = if sc.orient == FfiScrollbarOrient::Horizontal as u32 { RtScrollbarOrientation::HorizontalTop } else { RtScrollbarOrientation::VerticalRight };
             let w = RtScrollbar::new(orient);
             ratatui::widgets::StatefulWidget::render(w, area, buf, &mut state);
+        }
+        x if x == FfiWidgetKind::Chart as u32 => {
+            if cmd.handle.is_null() { return; }
+            let ch = unsafe { &*(cmd.handle as *const FfiChart) };
+            let area = area;
+            let mut datasets: Vec<RtDataset> = Vec::new();
+            for ds in &ch.datasets {
+                let mut d = RtDataset::default().name(ds.name.clone()).data(&ds.points);
+                if let Some(sty) = &ds.style { d = d.style(sty.clone()); }
+                d = d.graph_type(RtGraphType::Line);
+                datasets.push(d);
+            }
+            let mut chart = RtChart::new(datasets);
+            let x_axis = {
+                let mut ax = RtAxis::default();
+                if let Some(t) = &ch.x_title { ax = ax.title(t.clone()); }
+                ax
+            };
+            let y_axis = {
+                let mut ay = RtAxis::default();
+                if let Some(t) = &ch.y_title { ay = ay.title(t.clone()); }
+                ay
+            };
+            chart = chart.x_axis(x_axis).y_axis(y_axis);
+            if let Some(b) = &ch.block { chart = chart.block(b.clone()); }
+            ratatui::widgets::Widget::render(chart, area, buf);
         }
         _ => {}
     }
@@ -586,6 +636,23 @@ pub extern "C" fn ratatui_terminal_draw_frame(term: *mut FfiTerminal, cmds: *con
                     let mut w = RtSparkline::default().data(&sp.values);
                     if let Some(b) = &sp.block { w = w.block(b.clone()); }
                     frame.render_widget(w, area);
+                }
+                x if x == FfiWidgetKind::Chart as u32 => {
+                    if cmd.handle.is_null() { continue; }
+                    let ch = unsafe { &*(cmd.handle as *const FfiChart) };
+                    let mut datasets: Vec<RtDataset> = Vec::new();
+                    for ds in &ch.datasets {
+                        let mut d = RtDataset::default().name(ds.name.clone()).data(&ds.points);
+                        if let Some(sty) = &ds.style { d = d.style(sty.clone()); }
+                        d = d.graph_type(RtGraphType::Line);
+                        datasets.push(d);
+                    }
+                    let mut chart = RtChart::new(datasets);
+                    let x_axis = { let mut ax = RtAxis::default(); if let Some(t) = &ch.x_title { ax = ax.title(t.clone()); } ax };
+                    let y_axis = { let mut ay = RtAxis::default(); if let Some(t) = &ch.y_title { ay = ay.title(t.clone()); } ay };
+                    chart = chart.x_axis(x_axis).y_axis(y_axis);
+                    if let Some(b) = &ch.block { chart = chart.block(b.clone()); }
+                    frame.render_widget(chart, area);
                 }
                 #[cfg(feature = "scrollbar")]
                 x if x == FfiWidgetKind::Scrollbar as u32 => {
@@ -915,7 +982,7 @@ pub extern "C" fn ratatui_headless_render_barchart(width: u16, height: u16, b: *
     if let Some(bl) = &bc.block { w = w.block(bl.clone()); }
     ratatui::widgets::Widget::render(w, area, &mut buf);
     let mut s = String::new();
-    for y in 0..height { for x in 0..width { let cell = &buf[(x, y)]; s.push_str(cell.symbol()); } if y + 1 < height { s.push('\n'); } }
+    for y in 0..height { for x in 0..width { let cell = buf.get(x, y); s.push_str(cell.symbol()); } if y + 1 < height { s.push('\n'); } }
     match CString::new(s) { Ok(cstr) => { unsafe { *out_text_utf8 = cstr.into_raw(); } true }, Err(_) => false }
 }
 
@@ -974,14 +1041,17 @@ pub extern "C" fn ratatui_headless_render_sparkline(width: u16, height: u16, s: 
 
 #[no_mangle]
 #[cfg(feature = "scrollbar")]
+#[cfg_attr(docsrs, doc(cfg(feature = "scrollbar")))]
 pub extern "C" fn ratatui_scrollbar_new() -> *mut FfiScrollbar { Box::into_raw(Box::new(FfiScrollbar { orient: FfiScrollbarOrient::Vertical as u32, position: 0, content_len: 0, viewport_len: 0, block: None })) }
 
 #[no_mangle]
 #[cfg(feature = "scrollbar")]
+#[cfg_attr(docsrs, doc(cfg(feature = "scrollbar")))]
 pub extern "C" fn ratatui_scrollbar_free(s: *mut FfiScrollbar) { if s.is_null() { return; } unsafe { drop(Box::from_raw(s)); } }
 
 #[no_mangle]
 #[cfg(feature = "scrollbar")]
+#[cfg_attr(docsrs, doc(cfg(feature = "scrollbar")))]
 pub extern "C" fn ratatui_scrollbar_configure(s: *mut FfiScrollbar, orient: u32, position: u16, content_len: u16, viewport_len: u16) {
     if s.is_null() { return; }
     let sb = unsafe { &mut *s };
@@ -990,6 +1060,7 @@ pub extern "C" fn ratatui_scrollbar_configure(s: *mut FfiScrollbar, orient: u32,
 
 #[no_mangle]
 #[cfg(feature = "scrollbar")]
+#[cfg_attr(docsrs, doc(cfg(feature = "scrollbar")))]
 pub extern "C" fn ratatui_scrollbar_set_block_title(s: *mut FfiScrollbar, title_utf8: *const c_char, show_border: bool) {
     if s.is_null() { return; }
     let sb = unsafe { &mut *s };
@@ -1000,6 +1071,7 @@ pub extern "C" fn ratatui_scrollbar_set_block_title(s: *mut FfiScrollbar, title_
 
 #[no_mangle]
 #[cfg(feature = "scrollbar")]
+#[cfg_attr(docsrs, doc(cfg(feature = "scrollbar")))]
 pub extern "C" fn ratatui_terminal_draw_scrollbar_in(term: *mut FfiTerminal, s: *const FfiScrollbar, rect: FfiRect) -> bool {
     if term.is_null() || s.is_null() { return false; }
     let t = unsafe { &mut *term };
@@ -1014,6 +1086,7 @@ pub extern "C" fn ratatui_terminal_draw_scrollbar_in(term: *mut FfiTerminal, s: 
 
 #[no_mangle]
 #[cfg(feature = "scrollbar")]
+#[cfg_attr(docsrs, doc(cfg(feature = "scrollbar")))]
 pub extern "C" fn ratatui_headless_render_scrollbar(width: u16, height: u16, s: *const FfiScrollbar, out_text_utf8: *mut *mut c_char) -> bool {
     if s.is_null() || out_text_utf8.is_null() { return false; }
     let sb = unsafe { &*s };
