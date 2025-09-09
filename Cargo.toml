@@ -1,0 +1,12 @@
+[package]
+name = "ratatui_ffi"
+version = "0.0.1"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+ratatui = { path = "../../ratatui/ratatui" }
+crossterm = "0.27"
+bitflags = "2"

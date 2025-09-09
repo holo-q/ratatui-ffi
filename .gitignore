@@ -1,0 +1,12 @@
+# Rust
+/target/
+**/target/
+
+# Editors/OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Cargo (crates publish ignores target regardless)
+# Keep Cargo.lock if you prefer, or remove to follow lib crate guidance.
