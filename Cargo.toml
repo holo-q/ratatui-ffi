@@ -19,7 +19,7 @@ default = [ ]
 scrollbar = []
 
 [dependencies]
-ratatui = "0.29"
+ratatui = "0.30"
 crossterm = "0.27"
 bitflags = "2"
 
