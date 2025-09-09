@@ -511,6 +511,7 @@ fn render_cmd_to_buffer(cmd: &FfiDrawCmd, buf: &mut Buffer) {
             if let Some(b) = &sp.block { w = w.block(b.clone()); }
             ratatui::widgets::Widget::render(w, area, buf);
         }
+        
         #[cfg(feature = "scrollbar")]
         x if x == FfiWidgetKind::Scrollbar as u32 => {
             if cmd.handle.is_null() { return; }
@@ -980,6 +981,103 @@ pub extern "C" fn ratatui_headless_render_barchart(width: u16, height: u16, b: *
     let data: Vec<(&str, u64)> = bc.labels.iter().map(|s| s.as_str()).zip(bc.values.iter().cloned()).collect();
     let mut w = RtBarChart::default().data(&data);
     if let Some(bl) = &bc.block { w = w.block(bl.clone()); }
+    ratatui::widgets::Widget::render(w, area, &mut buf);
+    let mut s = String::new();
+    for y in 0..height { for x in 0..width { let cell = buf.get(x, y); s.push_str(cell.symbol()); } if y + 1 < height { s.push('\n'); } }
+    match CString::new(s) { Ok(cstr) => { unsafe { *out_text_utf8 = cstr.into_raw(); } true }, Err(_) => false }
+}
+
+// ----- Chart -----
+
+#[no_mangle]
+pub extern "C" fn ratatui_chart_new() -> *mut FfiChart {
+    Box::into_raw(Box::new(FfiChart { datasets: Vec::new(), x_title: None, y_title: None, block: None }))
+}
+
+#[no_mangle]
+pub extern "C" fn ratatui_chart_free(c: *mut FfiChart) { if c.is_null() { return; } unsafe { drop(Box::from_raw(c)); } }
+
+#[no_mangle]
+pub extern "C" fn ratatui_chart_add_line(c: *mut FfiChart, name_utf8: *const c_char, points_xy: *const f64, len_pairs: usize, style: FfiStyle) {
+    if c.is_null() { return; }
+    let ch = unsafe { &mut *c };
+    let name = if name_utf8.is_null() { String::new() } else { unsafe { CStr::from_ptr(name_utf8) }.to_str().unwrap_or("").to_string() };
+    let sty = style_from_ffi(style);
+    let pts = if points_xy.is_null() || len_pairs == 0 {
+        Vec::new()
+    } else {
+        let slice = unsafe { std::slice::from_raw_parts(points_xy, len_pairs * 2) };
+        let mut pts = Vec::with_capacity(len_pairs);
+        for i in 0..len_pairs { pts.push((slice[i*2], slice[i*2+1])); }
+        pts
+    };
+    ch.datasets.push(FfiChartDataset { name, points: pts, style: Some(sty) });
+}
+
+#[no_mangle]
+pub extern "C" fn ratatui_chart_set_axes_titles(c: *mut FfiChart, x_utf8: *const c_char, y_utf8: *const c_char) {
+    if c.is_null() { return; }
+    let ch = unsafe { &mut *c };
+    ch.x_title = if x_utf8.is_null() { None } else { unsafe { CStr::from_ptr(x_utf8) }.to_str().ok().map(|s| s.to_string()) };
+    ch.y_title = if y_utf8.is_null() { None } else { unsafe { CStr::from_ptr(y_utf8) }.to_str().ok().map(|s| s.to_string()) };
+}
+
+#[no_mangle]
+pub extern "C" fn ratatui_chart_set_block_title(c: *mut FfiChart, title_utf8: *const c_char, show_border: bool) {
+    if c.is_null() { return; }
+    let ch = unsafe { &mut *c };
+    let mut block = if show_border { Block::default().borders(Borders::ALL) } else { Block::default() };
+    if !title_utf8.is_null() {
+        let c_str = unsafe { CStr::from_ptr(title_utf8) };
+        if let Ok(title) = c_str.to_str() { block = block.title(title.to_string()); }
+    }
+    ch.block = Some(block);
+}
+
+#[no_mangle]
+pub extern "C" fn ratatui_terminal_draw_chart_in(term: *mut FfiTerminal, c: *const FfiChart, rect: FfiRect) -> bool {
+    if term.is_null() || c.is_null() { return false; }
+    let t = unsafe { &mut *term };
+    let ch = unsafe { &*c };
+    let area = Rect { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    let mut datasets: Vec<RtDataset> = Vec::new();
+    for ds in &ch.datasets {
+        let mut d = RtDataset::default().name(ds.name.clone()).data(&ds.points);
+        if let Some(sty) = &ds.style { d = d.style(sty.clone()); }
+        d = d.graph_type(RtGraphType::Line);
+        datasets.push(d);
+    }
+    let mut w = RtChart::new(datasets);
+    let mut x_axis = RtAxis::default();
+    let mut y_axis = RtAxis::default();
+    if let Some(ti) = &ch.x_title { x_axis = x_axis.title(ti.clone()); }
+    if let Some(ti) = &ch.y_title { y_axis = y_axis.title(ti.clone()); }
+    w = w.x_axis(x_axis).y_axis(y_axis);
+    if let Some(b) = &ch.block { w = w.block(b.clone()); }
+    let res = t.terminal.draw(|frame| { frame.render_widget(w.clone(), area); });
+    res.is_ok()
+}
+
+#[no_mangle]
+pub extern "C" fn ratatui_headless_render_chart(width: u16, height: u16, c: *const FfiChart, out_text_utf8: *mut *mut c_char) -> bool {
+    if c.is_null() || out_text_utf8.is_null() { return false; }
+    let ch = unsafe { &*c };
+    let area = Rect { x: 0, y: 0, width, height };
+    let mut buf = Buffer::empty(area);
+    let mut datasets: Vec<RtDataset> = Vec::new();
+    for ds in &ch.datasets {
+        let mut d = RtDataset::default().name(ds.name.clone()).data(&ds.points);
+        if let Some(sty) = &ds.style { d = d.style(sty.clone()); }
+        d = d.graph_type(RtGraphType::Line);
+        datasets.push(d);
+    }
+    let mut w = RtChart::new(datasets);
+    let mut x_axis = RtAxis::default();
+    let mut y_axis = RtAxis::default();
+    if let Some(ti) = &ch.x_title { x_axis = x_axis.title(ti.clone()); }
+    if let Some(ti) = &ch.y_title { y_axis = y_axis.title(ti.clone()); }
+    w = w.x_axis(x_axis).y_axis(y_axis);
+    if let Some(b) = &ch.block { w = w.block(b.clone()); }
     ratatui::widgets::Widget::render(w, area, &mut buf);
     let mut s = String::new();
     for y in 0..height { for x in 0..width { let cell = buf.get(x, y); s.push_str(cell.symbol()); } if y + 1 < height { s.push('\n'); } }
