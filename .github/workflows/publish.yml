@@ -1,0 +1,23 @@
+name: publish
+
+on:
+  push:
+    tags: [ 'v*.*.*' ]
+
+jobs:
+  crates-io:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Preflight (package)
+        run: cargo package
+      - name: Publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          if [ -z "$CARGO_REGISTRY_TOKEN" ]; then
+            echo "CARGO_REGISTRY_TOKEN is not set. Skipping publish." >&2
+            exit 0
+          fi
+          cargo publish
