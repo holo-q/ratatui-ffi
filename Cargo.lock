@@ -353,7 +353,7 @@ dependencies = [
 
 [[package]]
 name = "ratatui_ffi"
-version = "0.1.0"
+version = "0.1.5"
 dependencies = [
  "bitflags",
  "crossterm 0.27.0",

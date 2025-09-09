@@ -2,7 +2,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
 use std::ffi::{c_char, CStr, CString};
-use std::io::{stdout, Stdout};
+use std::io::{stdout, Stdout, Write};
 use std::ptr;
 
 use crossterm::execute;
@@ -20,9 +20,164 @@ use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph, Table, Row, Ce
 #[cfg_attr(docsrs, doc(cfg(feature = "scrollbar")))]
 use ratatui::widgets::{Scrollbar as RtScrollbar, ScrollbarState as RtScrollbarState};
 
+// ----- Panic guard helpers -----
+use std::any::Any;
+use std::panic::{catch_unwind, UnwindSafe};
+use std::fs::OpenOptions;
+use std::sync::OnceLock;
+
+fn panic_message(e: Box<dyn Any + Send + 'static>) -> String {
+    if let Some(s) = e.downcast_ref::<&str>() {
+        (*s).to_string()
+    } else if let Some(s) = e.downcast_ref::<String>() {
+        s.clone()
+    } else {
+        "<non-string panic payload>".to_string()
+    }
+}
+
+fn maybe_backtrace() -> Option<String> {
+    let enabled = std::env::var("RUST_BACKTRACE").map(|v| v != "0").unwrap_or(false);
+    if enabled {
+        Some(format!("{}", std::backtrace::Backtrace::force_capture()))
+    } else {
+        None
+    }
+}
+
+static LOG_FILE: OnceLock<Option<Mutex<std::fs::File>>> = OnceLock::new();
+
+fn logger() -> Option<&'static Mutex<std::fs::File>> {
+    LOG_FILE
+        .get_or_init(|| {
+            if let Ok(path) = std::env::var("RATATUI_FFI_LOG") {
+                if !path.is_empty() {
+                    // By default, recreate (truncate) the log on each run so users don't have to delete it.
+                    // Set RATATUI_FFI_LOG_APPEND=1 to append instead.
+                    let append = std::env::var("RATATUI_FFI_LOG_APPEND")
+                        .map(|v| v != "0" && !v.is_empty())
+                        .unwrap_or(false);
+                    let mut opts = OpenOptions::new();
+                    opts.create(true).write(true);
+                    if append {
+                        opts.append(true);
+                    } else {
+                        opts.truncate(true);
+                    }
+                    if let Ok(f) = opts.open(path) {
+                        return Some(Mutex::new(f));
+                    }
+                }
+            }
+            None
+        })
+        .as_ref()
+}
+
+fn log_line(s: &str) {
+    if let Some(m) = logger() {
+        if let Ok(mut f) = m.lock() { let _ = writeln!(f, "{}", s); }
+    }
+}
+
+fn slice_checked<'a, T>(ptr: *const T, len: usize, ctx: &str) -> Option<&'a [T]> {
+    if ptr.is_null() {
+        eprintln!("ratatui_ffi {}: null pointer", ctx);
+        log_line(&format!("{}: null pointer", ctx));
+        return None;
+    }
+    let align = std::mem::align_of::<T>();
+    let addr = ptr as usize;
+    if align != 0 && (addr % align) != 0 {
+        eprintln!("ratatui_ffi {}: misaligned pointer addr={:#x} align={}", ctx, addr, align);
+        log_line(&format!("{}: misaligned pointer addr={:#x} align={}", ctx, addr, align));
+        return None;
+    }
+    let size = std::mem::size_of::<T>();
+    if size == 0 {
+        unsafe { return Some(std::slice::from_raw_parts(ptr, len)); }
+    }
+    if let Some(total) = len.checked_mul(size) {
+        if total > isize::MAX as usize {
+            eprintln!("ratatui_ffi {}: slice too large len={} size={} total>{}", ctx, len, size, isize::MAX);
+            log_line(&format!("{}: slice too large len={} size={}", ctx, len, size));
+            return None;
+        }
+    } else {
+        eprintln!("ratatui_ffi {}: size overflow len={} size={}", ctx, len, size);
+        log_line(&format!("{}: size overflow len={} size={}", ctx, len, size));
+        return None;
+    }
+    unsafe { Some(std::slice::from_raw_parts(ptr, len)) }
+}
+
+fn ptr_checked<'a, T>(ptr: *const T, ctx: &str) -> Option<&'a T> {
+    if ptr.is_null() {
+        eprintln!("ratatui_ffi {}: null handle", ctx);
+        log_line(&format!("{}: null handle", ctx));
+        return None;
+    }
+    let align = std::mem::align_of::<T>();
+    let addr = ptr as usize;
+    if align != 0 && (addr % align) != 0 {
+        eprintln!("ratatui_ffi {}: misaligned handle addr={:#x} align={}", ctx, addr, align);
+        log_line(&format!("{}: misaligned handle addr={:#x} align={}", ctx, addr, align));
+        return None;
+    }
+    unsafe { Some(&*ptr) }
+}
+
+fn guard_bool<F: FnOnce() -> bool + UnwindSafe>(name: &str, f: F) -> bool {
+    let trace = std::env::var("RATATUI_FFI_TRACE").is_ok();
+    if trace { eprintln!("ratatui_ffi ENTER {}", name); log_line(&format!("ENTER {}", name)); }
+    let out = match catch_unwind(f) {
+        Ok(v) => v,
+        Err(e) => {
+            let msg = panic_message(e);
+            eprintln!("ratatui_ffi PANIC {}: {}", name, msg);
+            log_line(&format!("PANIC {}: {}", name, msg));
+            if let Some(bt) = maybe_backtrace() { eprintln!("{}", bt); }
+            false
+        }
+    };
+    if trace { eprintln!("ratatui_ffi EXIT  {} -> {}", name, out); log_line(&format!("EXIT  {} -> {}", name, out)); }
+    out
+}
+
+fn guard_ptr<T, F: FnOnce() -> *mut T + UnwindSafe>(name: &str, f: F) -> *mut T {
+    let trace = std::env::var("RATATUI_FFI_TRACE").is_ok();
+    if trace { eprintln!("ratatui_ffi ENTER {}", name); log_line(&format!("ENTER {}", name)); }
+    let out = match catch_unwind(f) {
+        Ok(v) => v,
+        Err(e) => {
+            let msg = panic_message(e);
+            eprintln!("ratatui_ffi PANIC {}: {}", name, msg);
+            log_line(&format!("PANIC {}: {}", name, msg));
+            if let Some(bt) = maybe_backtrace() { eprintln!("{}", bt); }
+            std::ptr::null_mut()
+        }
+    };
+    if trace { eprintln!("ratatui_ffi EXIT  {} -> {:?}", name, out); log_line(&format!("EXIT  {} -> {:?}", name, out)); }
+    out
+}
+
+fn guard_void<F: FnOnce() + UnwindSafe>(name: &str, f: F) {
+    let trace = std::env::var("RATATUI_FFI_TRACE").is_ok();
+    if trace { eprintln!("ratatui_ffi ENTER {}", name); log_line(&format!("ENTER {}", name)); }
+    if let Err(e) = catch_unwind(f) {
+        let msg = panic_message(e);
+        eprintln!("ratatui_ffi PANIC {}: {}", name, msg);
+        log_line(&format!("PANIC {}: {}", name, msg));
+        if let Some(bt) = maybe_backtrace() { eprintln!("{}", bt); }
+    }
+    if trace { eprintln!("ratatui_ffi EXIT  {}", name); log_line(&format!("EXIT  {}", name)); }
+}
+
 #[repr(C)]
 pub struct FfiTerminal {
     terminal: Terminal<CrosstermBackend<Stdout>>,
+    entered_alt: bool,
+    raw_mode: bool,
 }
 
 #[repr(C)]
@@ -129,41 +284,66 @@ pub enum FfiMouseButton { Left = 1, Right = 2, Middle = 3, None = 0 }
 
 #[no_mangle]
 pub extern "C" fn ratatui_init_terminal() -> *mut FfiTerminal {
-    let mut out = stdout();
-    // Best-effort: try raw mode and alternate screen, but don't fail hard if not available.
-    let _ = enable_raw_mode();
-    let _ = execute!(out, EnterAlternateScreen);
-    let backend = CrosstermBackend::new(out);
-    match Terminal::new(backend) {
-        Ok(terminal) => Box::into_raw(Box::new(FfiTerminal { terminal })),
-        Err(_) => {
-            let _ = disable_raw_mode();
-            ptr::null_mut()
+    guard_ptr("ratatui_init_terminal", || {
+        let mut out = stdout();
+        // Raw mode ON by default to avoid key echo; can disable via RATATUI_FFI_NO_RAW=1
+        let want_raw = std::env::var("RATATUI_FFI_NO_RAW").is_err();
+        let use_alt = std::env::var("RATATUI_FFI_ALTSCR").is_ok();
+        let mut entered_alt = false;
+        let mut raw_mode = false;
+        if want_raw {
+            if enable_raw_mode().is_ok() { raw_mode = true; }
         }
-    }
+        if use_alt {
+            if execute!(out, EnterAlternateScreen).is_ok() { entered_alt = true; }
+        }
+        let backend = CrosstermBackend::new(out);
+        match Terminal::new(backend) {
+            Ok(mut terminal) => {
+                let _ = terminal.hide_cursor();
+                // If we are not using the alternate screen, the visible buffer may contain
+                // previous shell output. Force a full clear on first draw so the UI doesn't
+                // appear additively over existing text.
+                let _ = terminal.clear();
+                Box::into_raw(Box::new(FfiTerminal { terminal, entered_alt, raw_mode }))
+            }
+            Err(_) => {
+                if raw_mode { let _ = disable_raw_mode(); }
+                ptr::null_mut()
+            }
+        }
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn ratatui_terminal_clear(term: *mut FfiTerminal) {
-    if term.is_null() {
-        return;
-    }
-    let t = unsafe { &mut *term };
-    let _ = t.terminal.clear();
+    guard_void("ratatui_terminal_clear", || {
+        if term.is_null() {
+            return;
+        }
+        let t = unsafe { &mut *term };
+        let _ = t.terminal.clear();
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn ratatui_terminal_free(term: *mut FfiTerminal) {
-    if term.is_null() {
-        return;
-    }
-    // Take ownership and drop after restoring terminal state
-    let mut boxed = unsafe { Box::from_raw(term) };
-    let _ = boxed.terminal.show_cursor();
-    // Leave alternate screen and disable raw mode
-    let _ = execute!(stdout(), LeaveAlternateScreen);
-    let _ = disable_raw_mode();
-    // Drop happens here
+    guard_void("ratatui_terminal_free", || {
+        if term.is_null() {
+            return;
+        }
+        // Take ownership and drop after restoring terminal state
+        let mut boxed = unsafe { Box::from_raw(term) };
+        let _ = boxed.terminal.show_cursor();
+        // Leave alternate screen and disable raw mode if we enabled them
+        if boxed.entered_alt {
+            let _ = execute!(stdout(), LeaveAlternateScreen);
+        }
+        if boxed.raw_mode {
+            let _ = disable_raw_mode();
+        }
+        // Drop happens here
+    })
 }
 
 #[no_mangle]
@@ -181,6 +361,33 @@ pub extern "C" fn ratatui_paragraph_new(text_utf8: *const c_char) -> *mut FfiPar
         lines.push(Line::from(Span::raw(l.to_string())));
     }
     Box::into_raw(Box::new(FfiParagraph { lines, block: None }))
+}
+
+#[no_mangle]
+pub extern "C" fn ratatui_paragraph_new_empty() -> *mut FfiParagraph {
+    Box::into_raw(Box::new(FfiParagraph { lines: Vec::new(), block: None }))
+}
+
+#[no_mangle]
+pub extern "C" fn ratatui_paragraph_append_span(para: *mut FfiParagraph, text_utf8: *const c_char, style: FfiStyle) {
+    if para.is_null() || text_utf8.is_null() { return; }
+    let p = unsafe { &mut *para };
+    let c_str = unsafe { CStr::from_ptr(text_utf8) };
+    if let Ok(s) = c_str.to_str() {
+        let st = style_from_ffi(style);
+        if let Some(last) = p.lines.last_mut() {
+            last.spans.push(Span::styled(s.to_string(), st));
+        } else {
+            p.lines.push(Line::from(Span::styled(s.to_string(), st)));
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn ratatui_paragraph_line_break(para: *mut FfiParagraph) {
+    if para.is_null() { return; }
+    let p = unsafe { &mut *para };
+    p.lines.push(Line::default());
 }
 
 #[no_mangle]
@@ -293,19 +500,21 @@ pub extern "C" fn ratatui_terminal_draw_paragraph(
     term: *mut FfiTerminal,
     para: *const FfiParagraph,
 ) -> bool {
-    if term.is_null() || para.is_null() {
-        return false;
-    }
-    let t = unsafe { &mut *term };
-    let p = unsafe { &*para };
-    let lines = p.lines.clone();
-    let mut widget = Paragraph::new(lines);
-    if let Some(b) = &p.block { widget = widget.block(b.clone()); }
-    let res = t.terminal.draw(|frame| {
-        let area: Rect = frame.size();
-        frame.render_widget(widget.clone(), area);
-    });
-    res.is_ok()
+    guard_bool("ratatui_terminal_draw_paragraph", || {
+        if term.is_null() || para.is_null() {
+            return false;
+        }
+        let t = unsafe { &mut *term };
+        let p = unsafe { &*para };
+        let lines = p.lines.clone();
+        let mut widget = Paragraph::new(lines);
+        if let Some(b) = &p.block { widget = widget.block(b.clone()); }
+        let res = t.terminal.draw(|frame| {
+            let area: Rect = frame.size();
+            frame.render_widget(widget.clone(), area);
+        });
+        res.is_ok()
+    })
 }
 
 #[no_mangle]
@@ -314,17 +523,19 @@ pub extern "C" fn ratatui_terminal_draw_paragraph_in(
     para: *const FfiParagraph,
     rect: FfiRect,
 ) -> bool {
-    if term.is_null() || para.is_null() { return false; }
-    let t = unsafe { &mut *term };
-    let p = unsafe { &*para };
-    let area = Rect { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
-    let lines = p.lines.clone();
-    let mut widget = Paragraph::new(lines);
-    if let Some(b) = &p.block { widget = widget.block(b.clone()); }
-    let res = t.terminal.draw(|frame| {
-        frame.render_widget(widget.clone(), area);
-    });
-    res.is_ok()
+    guard_bool("ratatui_terminal_draw_paragraph_in", || {
+        if term.is_null() || para.is_null() { return false; }
+        let t = unsafe { &mut *term };
+        let p = unsafe { &*para };
+        let area = Rect { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+        let lines = p.lines.clone();
+        let mut widget = Paragraph::new(lines);
+        if let Some(b) = &p.block { widget = widget.block(b.clone()); }
+        let res = t.terminal.draw(|frame| {
+            frame.render_widget(widget.clone(), area);
+        });
+        res.is_ok()
+    })
 }
 
 // ----- Headless rendering helpers (for smoke tests) -----
@@ -562,7 +773,7 @@ pub extern "C" fn ratatui_headless_render_frame(
     if cmds.is_null() || out_text_utf8.is_null() { return false; }
     let area = Rect { x: 0, y: 0, width, height };
     let mut buf = Buffer::empty(area);
-    let slice = unsafe { std::slice::from_raw_parts(cmds, len) };
+    let Some(slice) = slice_checked(cmds, len, "headless_render_frame(slice)") else { return false; };
     for cmd in slice.iter() { render_cmd_to_buffer(cmd, &mut buf); }
     let mut s = String::new();
     for y in 0..height { for x in 0..width { let cell = buf.get(x, y); s.push_str(cell.symbol()); } if y + 1 < height { s.push('\n'); } }
@@ -573,102 +784,113 @@ pub extern "C" fn ratatui_headless_render_frame(
 
 #[no_mangle]
 pub extern "C" fn ratatui_terminal_draw_frame(term: *mut FfiTerminal, cmds: *const FfiDrawCmd, len: usize) -> bool {
-    if term.is_null() || cmds.is_null() { return false; }
-    let t = unsafe { &mut *term };
-    let slice = unsafe { std::slice::from_raw_parts(cmds, len) };
-    let res = t.terminal.draw(|frame| {
-        for cmd in slice.iter() {
-            let area = Rect { x: cmd.rect.x, y: cmd.rect.y, width: cmd.rect.width, height: cmd.rect.height };
-            match cmd.kind {
-                x if x == FfiWidgetKind::Paragraph as u32 => {
-                    if cmd.handle.is_null() { continue; }
-                    let p = unsafe { &*(cmd.handle as *const FfiParagraph) };
-                    let mut w = Paragraph::new(p.lines.clone());
-                    if let Some(b) = &p.block { w = w.block(b.clone()); }
-                    frame.render_widget(w, area);
-                }
-                x if x == FfiWidgetKind::List as u32 => {
-                    if cmd.handle.is_null() { continue; }
-                    let l = unsafe { &*(cmd.handle as *const FfiList) };
-                    let items: Vec<ListItem> = l.items.iter().cloned().map(ListItem::new).collect();
-                    let mut w = List::new(items);
-                    if let Some(b) = &l.block { w = w.block(b.clone()); }
-                    frame.render_widget(w, area);
-                }
-                x if x == FfiWidgetKind::Table as u32 => {
-                    if cmd.handle.is_null() { continue; }
-                    let tb = unsafe { &*(cmd.handle as *const FfiTable) };
-                    let header_row = if tb.headers.is_empty() { None } else { Some(Row::new(tb.headers.iter().cloned().map(Cell::from).collect::<Vec<_>>())) };
-                    let rows: Vec<Row> = tb.rows.iter().map(|r| Row::new(r.iter().cloned().map(Cell::from).collect::<Vec<_>>())).collect();
-                    let col_count = if !tb.rows.is_empty() { tb.rows.iter().map(|r| r.len()).max().unwrap_or(1) } else { tb.headers.len().max(1) };
-                    let widths = std::iter::repeat(Constraint::Percentage((100 / col_count.max(1)) as u16)).take(col_count.max(1));
-                    let mut w = Table::new(rows, widths);
-                    if let Some(hr) = header_row { w = w.header(hr); }
-                    if let Some(b) = &tb.block { w = w.block(b.clone()); }
-                    frame.render_widget(w, area);
-                }
-                x if x == FfiWidgetKind::Gauge as u32 => {
-                    if cmd.handle.is_null() { continue; }
-                    let g = unsafe { &*(cmd.handle as *const FfiGauge) };
-                    let mut w = Gauge::default().ratio(g.ratio as f64);
-                    if let Some(label) = &g.label { w = w.label(label.clone()); }
-                    if let Some(b) = &g.block { w = w.block(b.clone()); }
-                    frame.render_widget(w, area);
-                }
-                x if x == FfiWidgetKind::Tabs as u32 => {
-                    if cmd.handle.is_null() { continue; }
-                    let tbs = unsafe { &*(cmd.handle as *const FfiTabs) };
-                    let titles: Vec<Line> = tbs.titles.iter().cloned().map(|s| Line::from(Span::raw(s))).collect();
-                    let mut w = Tabs::new(titles).select(tbs.selected as usize);
-                    if let Some(b) = &tbs.block { w = w.block(b.clone()); }
-                    frame.render_widget(w, area);
-                }
-                x if x == FfiWidgetKind::BarChart as u32 => {
-                    if cmd.handle.is_null() { continue; }
-                    let bc = unsafe { &*(cmd.handle as *const FfiBarChart) };
-                    let data: Vec<(&str, u64)> = bc.labels.iter().map(|s| s.as_str()).zip(bc.values.iter().cloned()).collect();
-                    let mut w = RtBarChart::default().data(&data);
-                    if let Some(b) = &bc.block { w = w.block(b.clone()); }
-                    frame.render_widget(w, area);
-                }
-                x if x == FfiWidgetKind::Sparkline as u32 => {
-                    if cmd.handle.is_null() { continue; }
-                    let sp = unsafe { &*(cmd.handle as *const FfiSparkline) };
-                    let mut w = RtSparkline::default().data(&sp.values);
-                    if let Some(b) = &sp.block { w = w.block(b.clone()); }
-                    frame.render_widget(w, area);
-                }
-                x if x == FfiWidgetKind::Chart as u32 => {
-                    if cmd.handle.is_null() { continue; }
-                    let ch = unsafe { &*(cmd.handle as *const FfiChart) };
-                    let mut datasets: Vec<RtDataset> = Vec::new();
-                    for ds in &ch.datasets {
-                        let mut d = RtDataset::default().name(ds.name.clone()).data(&ds.points);
-                        if let Some(sty) = &ds.style { d = d.style(sty.clone()); }
-                        d = d.graph_type(RtGraphType::Line);
-                        datasets.push(d);
+    guard_bool("ratatui_terminal_draw_frame", || {
+        if term.is_null() || cmds.is_null() { return false; }
+        let t = unsafe { &mut *term };
+        let Some(slice) = slice_checked(cmds, len, "terminal_draw_frame(slice)") else { return false; };
+        let res = t.terminal.draw(|frame| {
+            let full = frame.size();
+            for cmd in slice.iter() {
+                // Clamp to frame area to avoid invalid regions
+                let mut x = cmd.rect.x.min(full.width.saturating_sub(1));
+                let mut y = cmd.rect.y.min(full.height.saturating_sub(1));
+                let max_w = full.width.saturating_sub(x);
+                let max_h = full.height.saturating_sub(y);
+                let mut w = cmd.rect.width.min(max_w);
+                let mut h = cmd.rect.height.min(max_h);
+                if w == 0 || h == 0 { continue; }
+                let area = Rect { x, y, width: w, height: h };
+                match cmd.kind {
+                    x if x == FfiWidgetKind::Paragraph as u32 => {
+                        if cmd.handle.is_null() { continue; }
+                        let Some(p) = ptr_checked(cmd.handle as *const FfiParagraph, "draw_frame:Paragraph") else { continue; };
+                        let mut w = Paragraph::new(p.lines.clone());
+                        if let Some(b) = &p.block { w = w.block(b.clone()); }
+                        frame.render_widget(w, area);
                     }
-                    let mut chart = RtChart::new(datasets);
-                    let x_axis = { let mut ax = RtAxis::default(); if let Some(t) = &ch.x_title { ax = ax.title(t.clone()); } ax };
-                    let y_axis = { let mut ay = RtAxis::default(); if let Some(t) = &ch.y_title { ay = ay.title(t.clone()); } ay };
-                    chart = chart.x_axis(x_axis).y_axis(y_axis);
-                    if let Some(b) = &ch.block { chart = chart.block(b.clone()); }
-                    frame.render_widget(chart, area);
+                    x if x == FfiWidgetKind::List as u32 => {
+                        if cmd.handle.is_null() { continue; }
+                        let Some(l) = ptr_checked(cmd.handle as *const FfiList, "draw_frame:List") else { continue; };
+                        let items: Vec<ListItem> = l.items.iter().cloned().map(ListItem::new).collect();
+                        let mut w = List::new(items);
+                        if let Some(b) = &l.block { w = w.block(b.clone()); }
+                        frame.render_widget(w, area);
+                    }
+                    x if x == FfiWidgetKind::Table as u32 => {
+                        if cmd.handle.is_null() { continue; }
+                        let Some(tb) = ptr_checked(cmd.handle as *const FfiTable, "draw_frame:Table") else { continue; };
+                        let header_row = if tb.headers.is_empty() { None } else { Some(Row::new(tb.headers.iter().cloned().map(Cell::from).collect::<Vec<_>>())) };
+                        let rows: Vec<Row> = tb.rows.iter().map(|r| Row::new(r.iter().cloned().map(Cell::from).collect::<Vec<_>>())).collect();
+                        let col_count = if !tb.rows.is_empty() { tb.rows.iter().map(|r| r.len()).max().unwrap_or(1) } else { tb.headers.len().max(1) };
+                        let widths = std::iter::repeat(Constraint::Percentage((100 / col_count.max(1)) as u16)).take(col_count.max(1));
+                        let mut w = Table::new(rows, widths);
+                        if let Some(hr) = header_row { w = w.header(hr); }
+                        if let Some(b) = &tb.block { w = w.block(b.clone()); }
+                        frame.render_widget(w, area);
+                    }
+                    x if x == FfiWidgetKind::Gauge as u32 => {
+                        if cmd.handle.is_null() { continue; }
+                        let Some(g) = ptr_checked(cmd.handle as *const FfiGauge, "draw_frame:Gauge") else { continue; };
+                        let mut w = Gauge::default().ratio(g.ratio as f64);
+                        if let Some(label) = &g.label { w = w.label(label.clone()); }
+                        if let Some(b) = &g.block { w = w.block(b.clone()); }
+                        frame.render_widget(w, area);
+                    }
+                    x if x == FfiWidgetKind::Tabs as u32 => {
+                        if cmd.handle.is_null() { continue; }
+                        let Some(tbs) = ptr_checked(cmd.handle as *const FfiTabs, "draw_frame:Tabs") else { continue; };
+                        let titles: Vec<Line> = tbs.titles.iter().cloned().map(|s| Line::from(Span::raw(s))).collect();
+                        let mut w = Tabs::new(titles).select(tbs.selected as usize);
+                        if let Some(b) = &tbs.block { w = w.block(b.clone()); }
+                        frame.render_widget(w, area);
+                    }
+                    x if x == FfiWidgetKind::BarChart as u32 => {
+                        if cmd.handle.is_null() { continue; }
+                        let Some(bc) = ptr_checked(cmd.handle as *const FfiBarChart, "draw_frame:BarChart") else { continue; };
+                        let data: Vec<(&str, u64)> = bc.labels.iter().map(|s| s.as_str()).zip(bc.values.iter().cloned()).collect();
+                        let mut w = RtBarChart::default().data(&data);
+                        if let Some(b) = &bc.block { w = w.block(b.clone()); }
+                        frame.render_widget(w, area);
+                    }
+                    x if x == FfiWidgetKind::Sparkline as u32 => {
+                        if cmd.handle.is_null() { continue; }
+                        let Some(sp) = ptr_checked(cmd.handle as *const FfiSparkline, "draw_frame:Sparkline") else { continue; };
+                        let mut w = RtSparkline::default().data(&sp.values);
+                        if let Some(b) = &sp.block { w = w.block(b.clone()); }
+                        frame.render_widget(w, area);
+                    }
+                    x if x == FfiWidgetKind::Chart as u32 => {
+                        if cmd.handle.is_null() { continue; }
+                        let Some(ch) = ptr_checked(cmd.handle as *const FfiChart, "draw_frame:Chart") else { continue; };
+                        let mut datasets: Vec<RtDataset> = Vec::new();
+                        for ds in &ch.datasets {
+                            let mut d = RtDataset::default().name(ds.name.clone()).data(&ds.points);
+                            if let Some(sty) = &ds.style { d = d.style(sty.clone()); }
+                            d = d.graph_type(RtGraphType::Line);
+                            datasets.push(d);
+                        }
+                        let mut chart = RtChart::new(datasets);
+                        let x_axis = { let mut ax = RtAxis::default(); if let Some(t) = &ch.x_title { ax = ax.title(t.clone()); } ax };
+                        let y_axis = { let mut ay = RtAxis::default(); if let Some(t) = &ch.y_title { ay = ay.title(t.clone()); } ay };
+                        chart = chart.x_axis(x_axis).y_axis(y_axis);
+                        if let Some(b) = &ch.block { chart = chart.block(b.clone()); }
+                        frame.render_widget(chart, area);
+                    }
+                    #[cfg(feature = "scrollbar")]
+                    x if x == FfiWidgetKind::Scrollbar as u32 => {
+                        if cmd.handle.is_null() { continue; }
+                        let sc = unsafe { &*(cmd.handle as *const FfiScrollbar) };
+                        let mut state = RtScrollbarState::new(sc.content_len as usize).position(sc.position as usize);
+                        let orient = if sc.orient == FfiScrollbarOrient::Horizontal as u32 { RtScrollbarOrientation::HorizontalTop } else { RtScrollbarOrientation::VerticalRight };
+                        let w = RtScrollbar::new(orient);
+                        frame.render_stateful_widget(w, area, &mut state);
+                    }
+                    _ => {}
                 }
-                #[cfg(feature = "scrollbar")]
-                x if x == FfiWidgetKind::Scrollbar as u32 => {
-                    if cmd.handle.is_null() { continue; }
-                    let sc = unsafe { &*(cmd.handle as *const FfiScrollbar) };
-                    let mut state = RtScrollbarState::new(sc.content_len as usize).position(sc.position as usize);
-                    let orient = if sc.orient == FfiScrollbarOrient::Horizontal as u32 { RtScrollbarOrientation::HorizontalTop } else { RtScrollbarOrientation::VerticalRight };
-                    let w = RtScrollbar::new(orient);
-                    frame.render_stateful_widget(w, area, &mut state);
-                }
-                _ => {}
             }
-        }
-    });
-    res.is_ok()
+        });
+        res.is_ok()
+    })
 }
 
 // ----- Event injection (for automation) -----
@@ -788,25 +1010,27 @@ pub extern "C" fn ratatui_list_set_highlight_symbol(lst: *mut FfiList, sym_utf8:
 
 #[no_mangle]
 pub extern "C" fn ratatui_terminal_draw_list_in(term: *mut FfiTerminal, lst: *const FfiList, rect: FfiRect) -> bool {
-    if term.is_null() || lst.is_null() { return false; }
-    let t = unsafe { &mut *term };
-    let l = unsafe { &*lst };
-    let area = Rect { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
-    let items: Vec<ListItem> = l.items.iter().cloned().map(ListItem::new).collect();
-    let mut widget = List::new(items);
-    if let Some(b) = &l.block { widget = widget.block(b.clone()); }
-    if let Some(sty) = &l.highlight_style { widget = widget.highlight_style(sty.clone()); }
-    if let Some(sym) = &l.highlight_symbol { widget = widget.highlight_symbol(sym.as_str()); }
-    let res = t.terminal.draw(|frame| {
-        if let Some(sel) = l.selected {
-            let mut state = ratatui::widgets::ListState::default();
-            state.select(Some(sel));
-            frame.render_stateful_widget(widget.clone(), area, &mut state);
-        } else {
-            frame.render_widget(widget.clone(), area);
-        }
-    });
-    res.is_ok()
+    guard_bool("ratatui_terminal_draw_list_in", || {
+        if term.is_null() || lst.is_null() { return false; }
+        let t = unsafe { &mut *term };
+        let l = unsafe { &*lst };
+        let area = Rect { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+        let items: Vec<ListItem> = l.items.iter().cloned().map(ListItem::new).collect();
+        let mut widget = List::new(items);
+        if let Some(b) = &l.block { widget = widget.block(b.clone()); }
+        if let Some(sty) = &l.highlight_style { widget = widget.highlight_style(sty.clone()); }
+        if let Some(sym) = &l.highlight_symbol { widget = widget.highlight_symbol(sym.as_str()); }
+        let res = t.terminal.draw(|frame| {
+            if let Some(sel) = l.selected {
+                let mut state = ratatui::widgets::ListState::default();
+                state.select(Some(sel));
+                frame.render_stateful_widget(widget.clone(), area, &mut state);
+            } else {
+                frame.render_widget(widget.clone(), area);
+            }
+        });
+        res.is_ok()
+    })
 }
 
 // ----- Gauge -----
@@ -841,15 +1065,17 @@ pub extern "C" fn ratatui_gauge_set_block_title(g: *mut FfiGauge, title_utf8: *c
 
 #[no_mangle]
 pub extern "C" fn ratatui_terminal_draw_gauge_in(term: *mut FfiTerminal, g: *const FfiGauge, rect: FfiRect) -> bool {
-    if term.is_null() || g.is_null() { return false; }
-    let t = unsafe { &mut *term };
-    let gg = unsafe { &*g };
-    let area = Rect { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
-    let mut widget = Gauge::default().ratio(gg.ratio as f64);
-    if let Some(label) = &gg.label { widget = widget.label(label.clone()); }
-    if let Some(b) = &gg.block { widget = widget.block(b.clone()); }
-    let res = t.terminal.draw(|frame| { frame.render_widget(widget.clone(), area); });
-    res.is_ok()
+    guard_bool("ratatui_terminal_draw_gauge_in", || {
+        if term.is_null() || g.is_null() { return false; }
+        let t = unsafe { &mut *term };
+        let gg = unsafe { &*g };
+        let area = Rect { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+        let mut widget = Gauge::default().ratio(gg.ratio as f64);
+        if let Some(label) = &gg.label { widget = widget.label(label.clone()); }
+        if let Some(b) = &gg.block { widget = widget.block(b.clone()); }
+        let res = t.terminal.draw(|frame| { frame.render_widget(widget.clone(), area); });
+        res.is_ok()
+    })
 }
 
 #[no_mangle]
@@ -900,15 +1126,17 @@ pub extern "C" fn ratatui_tabs_set_block_title(t: *mut FfiTabs, title_utf8: *con
 
 #[no_mangle]
 pub extern "C" fn ratatui_terminal_draw_tabs_in(term: *mut FfiTerminal, t: *const FfiTabs, rect: FfiRect) -> bool {
-    if term.is_null() || t.is_null() { return false; }
-    let termi = unsafe { &mut *term };
-    let tabs = unsafe { &*t };
-    let area = Rect { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
-    let titles: Vec<Line> = tabs.titles.iter().cloned().map(|s| Line::from(Span::raw(s))).collect();
-    let mut widget = Tabs::new(titles).select(tabs.selected as usize);
-    if let Some(b) = &tabs.block { widget = widget.block(b.clone()); }
-    let res = termi.terminal.draw(|frame| { frame.render_widget(widget.clone(), area); });
-    res.is_ok()
+    guard_bool("ratatui_terminal_draw_tabs_in", || {
+        if term.is_null() || t.is_null() { return false; }
+        let termi = unsafe { &mut *term };
+        let tabs = unsafe { &*t };
+        let area = Rect { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+        let titles: Vec<Line> = tabs.titles.iter().cloned().map(|s| Line::from(Span::raw(s))).collect();
+        let mut widget = Tabs::new(titles).select(tabs.selected as usize);
+        if let Some(b) = &tabs.block { widget = widget.block(b.clone()); }
+        let res = termi.terminal.draw(|frame| { frame.render_widget(widget.clone(), area); });
+        res.is_ok()
+    })
 }
 
 #[no_mangle]
@@ -961,15 +1189,17 @@ pub extern "C" fn ratatui_barchart_set_block_title(b: *mut FfiBarChart, title_ut
 
 #[no_mangle]
 pub extern "C" fn ratatui_terminal_draw_barchart_in(term: *mut FfiTerminal, b: *const FfiBarChart, rect: FfiRect) -> bool {
-    if term.is_null() || b.is_null() { return false; }
-    let t = unsafe { &mut *term };
-    let bc = unsafe { &*b };
-    let area = Rect { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
-    let data: Vec<(&str, u64)> = bc.labels.iter().map(|s| s.as_str()).zip(bc.values.iter().cloned()).collect();
-    let mut w = RtBarChart::default().data(&data);
-    if let Some(bl) = &bc.block { w = w.block(bl.clone()); }
-    let res = t.terminal.draw(|frame| { frame.render_widget(w.clone(), area); });
-    res.is_ok()
+    guard_bool("ratatui_terminal_draw_barchart_in", || {
+        if term.is_null() || b.is_null() { return false; }
+        let t = unsafe { &mut *term };
+        let bc = unsafe { &*b };
+        let area = Rect { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+        let data: Vec<(&str, u64)> = bc.labels.iter().map(|s| s.as_str()).zip(bc.values.iter().cloned()).collect();
+        let mut w = RtBarChart::default().data(&data);
+        if let Some(bl) = &bc.block { w = w.block(bl.clone()); }
+        let res = t.terminal.draw(|frame| { frame.render_widget(w.clone(), area); });
+        res.is_ok()
+    })
 }
 
 #[no_mangle]
@@ -1036,26 +1266,28 @@ pub extern "C" fn ratatui_chart_set_block_title(c: *mut FfiChart, title_utf8: *c
 
 #[no_mangle]
 pub extern "C" fn ratatui_terminal_draw_chart_in(term: *mut FfiTerminal, c: *const FfiChart, rect: FfiRect) -> bool {
-    if term.is_null() || c.is_null() { return false; }
-    let t = unsafe { &mut *term };
-    let ch = unsafe { &*c };
-    let area = Rect { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
-    let mut datasets: Vec<RtDataset> = Vec::new();
-    for ds in &ch.datasets {
-        let mut d = RtDataset::default().name(ds.name.clone()).data(&ds.points);
-        if let Some(sty) = &ds.style { d = d.style(sty.clone()); }
-        d = d.graph_type(RtGraphType::Line);
-        datasets.push(d);
-    }
-    let mut w = RtChart::new(datasets);
-    let mut x_axis = RtAxis::default();
-    let mut y_axis = RtAxis::default();
-    if let Some(ti) = &ch.x_title { x_axis = x_axis.title(ti.clone()); }
-    if let Some(ti) = &ch.y_title { y_axis = y_axis.title(ti.clone()); }
-    w = w.x_axis(x_axis).y_axis(y_axis);
-    if let Some(b) = &ch.block { w = w.block(b.clone()); }
-    let res = t.terminal.draw(|frame| { frame.render_widget(w.clone(), area); });
-    res.is_ok()
+    guard_bool("ratatui_terminal_draw_chart_in", || {
+        if term.is_null() || c.is_null() { return false; }
+        let t = unsafe { &mut *term };
+        let ch = unsafe { &*c };
+        let area = Rect { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+        let mut datasets: Vec<RtDataset> = Vec::new();
+        for ds in &ch.datasets {
+            let mut d = RtDataset::default().name(ds.name.clone()).data(&ds.points);
+            if let Some(sty) = &ds.style { d = d.style(sty.clone()); }
+            d = d.graph_type(RtGraphType::Line);
+            datasets.push(d);
+        }
+        let mut w = RtChart::new(datasets);
+        let mut x_axis = RtAxis::default();
+        let mut y_axis = RtAxis::default();
+        if let Some(ti) = &ch.x_title { x_axis = x_axis.title(ti.clone()); }
+        if let Some(ti) = &ch.y_title { y_axis = y_axis.title(ti.clone()); }
+        w = w.x_axis(x_axis).y_axis(y_axis);
+        if let Some(b) = &ch.block { w = w.block(b.clone()); }
+        let res = t.terminal.draw(|frame| { frame.render_widget(w.clone(), area); });
+        res.is_ok()
+    })
 }
 
 #[no_mangle]
@@ -1111,14 +1343,16 @@ pub extern "C" fn ratatui_sparkline_set_block_title(s: *mut FfiSparkline, title_
 
 #[no_mangle]
 pub extern "C" fn ratatui_terminal_draw_sparkline_in(term: *mut FfiTerminal, s: *const FfiSparkline, rect: FfiRect) -> bool {
-    if term.is_null() || s.is_null() { return false; }
-    let t = unsafe { &mut *term };
-    let sp = unsafe { &*s };
-    let area = Rect { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
-    let mut w = RtSparkline::default().data(&sp.values);
-    if let Some(bl) = &sp.block { w = w.block(bl.clone()); }
-    let res = t.terminal.draw(|frame| { frame.render_widget(w.clone(), area); });
-    res.is_ok()
+    guard_bool("ratatui_terminal_draw_sparkline_in", || {
+        if term.is_null() || s.is_null() { return false; }
+        let t = unsafe { &mut *term };
+        let sp = unsafe { &*s };
+        let area = Rect { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+        let mut w = RtSparkline::default().data(&sp.values);
+        if let Some(bl) = &sp.block { w = w.block(bl.clone()); }
+        let res = t.terminal.draw(|frame| { frame.render_widget(w.clone(), area); });
+        res.is_ok()
+    })
 }
 
 #[no_mangle]

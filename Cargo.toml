@@ -28,3 +28,9 @@ bitflags = "2"
 all-features = true
 # Enable `docsrs` cfg so `#[cfg_attr(docsrs, ...)]` works and feature badges render.
 rustdoc-args = ["--cfg", "docsrs"]
+
+[profile.dev]
+panic = "unwind"
+
+[profile.release]
+panic = "unwind"
