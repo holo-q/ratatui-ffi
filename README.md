@@ -8,6 +8,10 @@
 
 Native C ABI for [Ratatui], exposing a small cdylib you can consume from C, C#, and other languages.
 
+## Language Bindings
+- C#: [holo-q/Ratatui.cs](https://github.com/holo-q/Ratatui.cs)
+- Python: [holo-q/ratatui-py](https://github.com/holo-q/ratatui-py)
+
 Status
 - Targets the Ratatui workspace API (0.30 beta series). The crate currently depends on the workspace layout, which is why it has a path dependency to `ratatui`.
 - If you want to build against crates.io instead, switch the dependency to a crates.io version (see below).
