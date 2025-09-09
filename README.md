@@ -1,5 +1,9 @@
 # ratatui_ffi
 
+![CI](https://github.com/holo-q/ratatui-ffi/actions/workflows/ci.yml/badge.svg)
+[![crates.io](https://img.shields.io/crates/v/ratatui_ffi.svg?logo=rust&label=crates.io)](https://crates.io/crates/ratatui_ffi)
+[![crates.io downloads](https://img.shields.io/crates/d/ratatui_ffi.svg?logo=rust)](https://crates.io/crates/ratatui_ffi)
+
 Native C ABI for [Ratatui], exposing a small cdylib you can consume from C, C#, and other languages.
 
 Status
@@ -15,6 +19,11 @@ cargo build --release
 Using from C/C#
 - Exported symbols use `extern "C"` and a stable ABI.
 - See the C# wrapper in holo-q/ratatui-cs for a reference P/Invoke layer and SafeHandle pattern.
+
+Install (Rust)
+```bash
+cargo add ratatui_ffi
+```
 
 Switching to crates.io
 - Current Cargo.toml uses:
