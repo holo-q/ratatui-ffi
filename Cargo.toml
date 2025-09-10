@@ -18,7 +18,7 @@ name = "ffi_introspect"
 path = "tools/ffi_introspect.rs"
 
 [features]
-default = [ ]
+default = ["scrollbar" ]
 # Enable experimental Scrollbar support (requires newer Ratatui API). Off by default for crates.io compatibility.
 scrollbar = []
 

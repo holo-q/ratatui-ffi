@@ -6,7 +6,17 @@
 [![crates.io downloads](https://img.shields.io/crates/d/ratatui_ffi.svg?logo=rust)](https://crates.io/crates/ratatui_ffi)
 [![docs.rs](https://img.shields.io/docsrs/ratatui_ffi?logo=rust)](https://docs.rs/ratatui_ffi)
 
-Native C ABI for [Ratatui], exposing a small cdylib you can consume from C, C#, and other languages.
+Native C ABI for [Ratatui], exposing a small cdylib you can consume from C, C#, Python, TypeScript, and others.
+
+## Current Coverage
+
+- Widgets: Paragraph, List (+state), Table (+state), Tabs, Gauge, LineGauge, BarChart, Sparkline, Chart, Scrollbar, Clear, RatatuiLogo, Canvas.
+- Layout: `layout_split`, `layout_split_ex` (spacing + per‑side margins), `layout_split_ex2` (adds `Constraint::Ratio`).
+- Text/Styles: `Span`, `Line`, per‑span lines; paragraph base style, alignment, wrap(trim), scroll; colors (named/RGB/indexed); modifiers (incl. hidden).
+- Block: per‑side borders, border type, padding, title as spans, title alignment across all block‑bearing widgets.
+- Terminal: init/clear, batched frame render, raw/alt toggles, cursor get/set/show, size, event poll/injection.
+- Headless: text snapshot; compact and full‑fidelity style snapshots; structured cell dump (`FfiCellInfo`).
+- Batching: list items, paragraph lines, table rows with multi‑line cells, datasets; reserve helpers.
 
 ## Language Bindings
 - C#: [holo-q/Ratatui.cs](https://github.com/holo-q/Ratatui.cs)
@@ -32,6 +42,29 @@ Local FFI introspection
   cargo run --quiet --bin ffi_introspect
   ```
   It reports source/binary exports and groups by prefix, and compares widget coverage against Ratatui’s public docs. No files are generated.
+  It also prints a module‑group summary (terminal/layout/headless/etc.). For JSON, pass `--json`.
+
+Headless rendering and style snapshots
+- Text snapshots: render a composed frame of widgets without a terminal:
+  - `ratatui_headless_render_frame(width, height, cmds, len, out_text_utf8)`
+  - `ratatui_headless_render_paragraph`, `ratatui_headless_render_list`, `ratatui_headless_render_table`, etc.
+- Style snapshots: per-cell style dumps for visual testing:
+  - Compact: `ratatui_headless_render_frame_styles` returns rows of "FG2 BG2 MOD4" hex groups (named palette only).
+  - Extended: `ratatui_headless_render_frame_styles_ex` returns rows of "FG8 BG8 MOD4" hex groups where FG/BG use the same 32-bit encoding as `FfiStyle` (named, indexed, or RGB).
+  - Structured cells: `ratatui_headless_render_frame_cells(width,height,cmds,len,out_cells,cap)` to fill an array of `FfiCellInfo { ch, fg, bg, mods }`.
+
+Throughput helpers
+- Tables with many multi-line cells can be appended in batches to reduce FFI overhead:
+  - Single row: `ratatui_table_append_row_cells_lines(cells, cell_count)`
+  - Batched rows: `ratatui_table_append_rows_cells_lines(rows, row_count)` where each row is an `FfiRowCellsLines` pointing to an array of `FfiCellLines`.
+
+Canvas (custom drawing)
+- Build custom charts/maps with the Ratatui Canvas via FFI:
+  - Create: `ratatui_canvas_new(x_min, x_max, y_min, y_max)`
+  - Configure: `ratatui_canvas_set_bounds`, `ratatui_canvas_set_background_color`, `ratatui_canvas_set_block_title`/`_adv`
+  - Add shapes: `ratatui_canvas_add_line`, `ratatui_canvas_add_rect`, `ratatui_canvas_add_points`
+  - Render: `ratatui_terminal_draw_canvas_in` or `ratatui_headless_render_canvas`
+  - Notes: for 0.29, points use a default marker (no per-points marker selection).
 
 Using from C/C#
 - Exported symbols use `extern "C"` and a stable ABI.

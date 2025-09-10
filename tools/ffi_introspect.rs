@@ -12,36 +12,22 @@ fn extract_source_exports(src: &str) -> Vec<String> {
     // Simple state machine: when we see #[no_mangle], look ahead for extern "C" fn NAME(
     let mut out = Vec::new();
     let mut lines = src.lines();
-    let mut pending = false;
     while let Some(line) = lines.next() {
         let l = line.trim();
         if l.starts_with("#[no_mangle]") {
-            pending = true;
-            continue;
-        }
-        if pending {
-            let s = l;
-            if let Some(idx) = s.find("extern \"C\" fn ") {
-                let rest = &s[idx + "extern \"C\" fn ".len()..];
-                let name: String = rest.chars().take_while(|&c| c == '_' || c.is_ascii_alphanumeric()).collect();
-                if !name.is_empty() {
-                    out.push(name);
-                }
-                pending = false;
-            } else {
-                // If not on this line, try the next non-empty line
+            // scan ahead up to a few lines to find the extern signature (to skip cfg attributes)
+            for _ in 0..6 {
                 if let Some(next) = lines.next() {
                     let s2 = next.trim();
                     if let Some(idx2) = s2.find("extern \"C\" fn ") {
                         let rest = &s2[idx2 + "extern \"C\" fn ".len()..];
                         let name: String = rest.chars().take_while(|&c| c == '_' || c.is_ascii_alphanumeric()).collect();
-                        if !name.is_empty() {
-                            out.push(name);
-                        }
+                        if !name.is_empty() { out.push(name); }
+                        break;
                     }
                 }
-                pending = false;
             }
+            continue;
         }
     }
     out.sort();
@@ -153,7 +139,32 @@ fn main() {
     let mut g_bin: BTreeMap<String, usize> = BTreeMap::new();
     for f in &bin_exports { *g_bin.entry(group_key(f)).or_default() += 1; }
 
-    if json { println!("--json not implemented"); return; }
+    if json {
+        // Emit machine readable JSON without external deps (build a string to avoid format braces escaping)
+        let mut s = String::new();
+        s.push_str("{\"library\":");
+        match &lib {
+            Some(p) => { s.push('\"'); s.push_str(&json_escape(&p.to_string_lossy())); s.push('\"'); }
+            None => s.push_str("null"),
+        }
+        s.push_str(",\"exports_source\":[");
+        for (i, f) in src_exports.iter().enumerate() { if i>0 { s.push(','); } s.push('\"'); s.push_str(&json_escape(f)); s.push('\"'); }
+        s.push_str("],\"exports_binary\":[");
+        for (i, f) in bin_exports.iter().enumerate() { if i>0 { s.push(','); } s.push('\"'); s.push_str(&json_escape(f)); s.push('\"'); }
+        s.push_str("],\"mismatch\":{\"source_only\":[");
+        for (i, f) in src_only.iter().enumerate() { if i>0 { s.push(','); } s.push('\"'); s.push_str(&json_escape(f)); s.push('\"'); }
+        s.push_str("],\"binary_only\":[");
+        for (i, f) in bin_only.iter().enumerate() { if i>0 { s.push(','); } s.push('\"'); s.push_str(&json_escape(f)); s.push('\"'); }
+        s.push_str("]},\"groups\":{\"source\":{");
+        let mut first = true;
+        for (k, v) in &g_src { if !first { s.push(','); } first=false; s.push('\"'); s.push_str(&json_escape(k)); s.push_str("\":"); s.push_str(&v.to_string()); }
+        s.push_str("},\"binary\":{");
+        let mut firstb = true;
+        for (k, v) in &g_bin { if !firstb { s.push(','); } firstb=false; s.push('\"'); s.push_str(&json_escape(k)); s.push_str("\":"); s.push_str(&v.to_string()); }
+        s.push_str("}}}");
+        println!("{}", s);
+        return;
+    }
 
     println!("== ratatui_ffi exports ==");
     println!("Functions (source): {}", src_exports.len());
@@ -175,12 +186,24 @@ fn main() {
         for (k, v) in &g_bin { println!("    {:<14} {}", k, v); }
     }
 
+    // Module groups summary (heuristic, zero hardcoding of symbol lists):
+    // This gives a quick sense of non-widget areas exposed via FFI groups.
+    let mut interesting = vec![
+        "terminal", "layout", "headless", "paragraph", "list", "table", "tabs", "gauge", "barchart", "sparkline", "chart", "scrollbar", "canvas", "color",
+    ];
+    println!("\nModule Groups Present (FFI):");
+    interesting.sort();
+    for k in interesting {
+        let has = g_src.contains_key(k);
+        println!("  {:<12} {}", k, if has { "✓" } else { "✗" });
+    }
+
     // Optional: compare against ratatui docs to spot missing widget families
     let doc_widgets = root.join("target/doc/ratatui/widgets/sidebar-items.js");
     if doc_widgets.exists() {
         println!("\nRatatuí widgets coverage (from docs):");
         if let Ok(s) = fs::read_to_string(&doc_widgets) {
-            // very simple extract of struct names: find '"struct":["A","B",...]'
+            // extract struct names and keep only those that implement Widget/StatefulWidget
             let mut structs: Vec<String> = Vec::new();
             if let Some(i) = s.find("\"struct\":") {
                 if let Some(start) = s[i..].find('[') {
@@ -191,7 +214,14 @@ fn main() {
                             let part = part.trim();
                             if part.starts_with('\"') && part.ends_with('\"') {
                                 let name = part.trim_matches('"').to_string();
-                                if !name.is_empty() { structs.push(name); }
+                                if !name.is_empty() {
+                                    // check the struct page for trait impls mentioning Widget/StatefulWidget
+                                    let page = root.join(format!("target/doc/ratatui/widgets/struct.{}.html", name));
+                                    if let Ok(html) = fs::read_to_string(&page) {
+                                        let impls_widget = html.contains("impl-Widget-for-") || html.contains("impl-StatefulWidget-for-");
+                                        if impls_widget { structs.push(name); }
+                                    }
+                                }
                             }
                         }
                     }

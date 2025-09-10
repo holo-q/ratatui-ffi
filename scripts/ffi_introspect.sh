@@ -8,19 +8,31 @@ set -euo pipefail
 # - Optional: --json to emit machine-readable JSON.
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
-SRC_FILE="$ROOT_DIR/src/lib.rs"
+SRC_DIR="$ROOT_DIR/src"
 JSON=0
 
 if [[ ${1:-} == "--json" ]]; then JSON=1; fi
 
-if [[ ! -f "$SRC_FILE" ]]; then
-  echo "error: cannot find src/lib.rs at $SRC_FILE" >&2
+if [[ ! -d "$SRC_DIR" ]]; then
+  echo "error: cannot find src dir at $SRC_DIR" >&2
   exit 2
 fi
 
 extract_from_src() {
-  awk '/#\[no_mangle\]/{getline; if ($0 ~ /extern "C" fn ([a-zA-Z0-9_]+)/){match($0,/extern "C" fn ([a-zA-Z0-9_]+)/,m); print m[1]}}' "$SRC_FILE" |
-    sort -u
+  # Scan all Rust sources under src/ for #[no_mangle] extern "C" fn symbols.
+  # Allow up to a few lookahead lines to skip cfg attributes, etc.
+  awk '
+    FNR==1 { state=0 }
+    /#\[no_mangle\]/ { state=6; next }
+    state>0 {
+      if ($0 ~ /extern "C" fn [A-Za-z0-9_]+\(/) {
+        match($0, /extern "C" fn ([A-Za-z0-9_]+)/, m);
+        if (m[1] != "") print m[1];
+        state=0; next
+      }
+      state--
+    }
+  ' $(find "$SRC_DIR" -type f -name '*.rs' | sort) | sort -u
 }
 
 extract_from_lib() {
@@ -122,4 +134,3 @@ if (( ${#BIN_FUNCS[@]} > 0 )); then
   echo "  Binary:"
   for k in "${!GROUP_BIN[@]}"; do printf '    %-14s %d\n' "$k" "${GROUP_BIN[$k]}"; done | sort
 fi
-
