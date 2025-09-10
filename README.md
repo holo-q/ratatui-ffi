@@ -22,6 +22,17 @@ cargo build --release
 # produces target/release/libratatui_ffi.so (Linux), .dylib (macOS), or ratatui_ffi.dll (Windows)
 ```
 
+Local FFI introspection
+- Build Ratatui docs once to enable widget coverage:
+  ```bash
+  cargo doc -p ratatui
+  ```
+- Run the introspector to see FFI exports and widget coverage:
+  ```bash
+  cargo run --quiet --bin ffi_introspect
+  ```
+  It reports source/binary exports and groups by prefix, and compares widget coverage against Ratatui’s public docs. No files are generated.
+
 Using from C/C#
 - Exported symbols use `extern "C"` and a stable ABI.
 - See the C# wrapper in holo-q/ratatui-cs for a reference P/Invoke layer and SafeHandle pattern.
