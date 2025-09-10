@@ -288,6 +288,32 @@ pub extern "C" fn ratatui_paragraph_append_line(para: *mut FfiParagraph, text_ut
     }
 }
 
+// Begin a new line to which styled spans can be appended.
+#[no_mangle]
+pub extern "C" fn ratatui_paragraph_begin_line(para: *mut FfiParagraph) {
+    if para.is_null() { return; }
+    let p = unsafe { &mut *para };
+    p.lines.push(Line::default());
+}
+
+// Append a styled span to the current (last) line.
+#[no_mangle]
+pub extern "C" fn ratatui_paragraph_append_span(para: *mut FfiParagraph, text_utf8: *const c_char, style: FfiStyle) {
+    if para.is_null() || text_utf8.is_null() { return; }
+    let p = unsafe { &mut *para };
+    if p.lines.is_empty() { p.lines.push(Line::default()); }
+    let c_str = unsafe { CStr::from_ptr(text_utf8) };
+    if let Ok(s) = c_str.to_str() {
+        let st = style_from_ffi(style);
+        if let Some(last) = p.lines.last_mut() {
+            last.spans.push(Span::styled(s.to_string(), st));
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn ratatui_paragraph_end_line(_para: *mut FfiParagraph) { }
+
 #[no_mangle]
 pub extern "C" fn ratatui_terminal_draw_paragraph(
     term: *mut FfiTerminal,
