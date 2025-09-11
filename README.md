@@ -6,6 +6,12 @@
 [![crates.io downloads](https://img.shields.io/crates/d/ratatui_ffi.svg?logo=rust)](https://crates.io/crates/ratatui_ffi)
 [![docs.rs](https://img.shields.io/docsrs/ratatui_ffi?logo=rust)](https://docs.rs/ratatui_ffi)
 
+<!-- Bindings badges -->
+[![C# Binding](https://img.shields.io/badge/bindings-C%23-239120?logo=csharp&logoColor=white)](https://github.com/holo-q/Ratatui.cs)
+[![Python Binding](https://img.shields.io/badge/bindings-Python-3776AB?logo=python&logoColor=white)](https://github.com/holo-q/ratatui-py)
+[![Go Binding](https://img.shields.io/badge/bindings-Go-00ADD8?logo=go&logoColor=white)](https://github.com/holo-q/ratatui-go)
+[![TypeScript Binding](https://img.shields.io/badge/bindings-TypeScript-3178C6?logo=typescript&logoColor=white)](https://github.com/holo-q/ratatui-ts)
+
 Native C ABI for [Ratatui], shipped as a tiny `cdylib` you can call from C, C#, Python, TypeScript (via FFI), and more. Optimized for hot loops: span‑based setters and batch APIs minimize allocations and marshaling.
 
 ## Highlights
