@@ -214,10 +214,17 @@ pub struct FfiListState { selected: Option<usize>, offset: usize }
 pub struct FfiTableState { selected: Option<usize>, offset: usize }
 
 #[repr(C)]
-pub struct FfiGauge { ratio: f32, label: Option<String>, block: Option<Block<'static>>, style: Option<Style>, label_style: Option<Style>, gauge_style: Option<Style> }
+pub struct FfiGauge {
+    ratio: f32,
+    label: Option<String>,
+    block: Option<Block<'static>>,
+    style: Option<Style>,
+    label_style: Option<Style>,
+    gauge_style: Option<Style>,
+}
 
 #[repr(C)]
-pub struct FfiLineGauge { ratio: f32, label: Option<String>, block: Option<Block<'static>>, style: Option<Style> }
+pub struct FfiLineGauge { ratio: f32, label: Option<String>, label_line: Option<Line<'static>>, block: Option<Block<'static>>, style: Option<Style> }
 
 #[repr(C)]
 pub struct FfiTabs { titles: Vec<String>, selected: u16, block: Option<Block<'static>>, unselected_style: Option<Style>, selected_style: Option<Style>, divider: Option<String>, titles_spans: Option<Vec<Line<'static>>> }
@@ -769,6 +776,8 @@ bitflags::bitflags! {
         const BATCH_LIST_ITEMS = 1 << 4;
         const COLOR_HELPERS    = 1 << 5;
         const AXIS_LABELS      = 1 << 6;
+        // New span-based setters for labels/dividers/titles
+        const SPAN_SETTERS     = 1 << 7;
     }
 }
 
@@ -782,6 +791,7 @@ pub extern "C" fn ratatui_ffi_feature_bits() -> u32 {
     bits |= FfiFeatures::BATCH_LIST_ITEMS;
     bits |= FfiFeatures::COLOR_HELPERS;
     bits |= FfiFeatures::AXIS_LABELS;
+    bits |= FfiFeatures::SPAN_SETTERS;
     // Paragraph and Tabs batching are lightweight; not explicitly flagged.
     bits.bits()
 }
@@ -1021,7 +1031,7 @@ pub extern "C" fn ratatui_paragraph_append_line(para: *mut FfiParagraph, text_ut
 // ----- LineGauge -----
 
 #[no_mangle]
-pub extern "C" fn ratatui_linegauge_new() -> *mut FfiLineGauge { Box::into_raw(Box::new(FfiLineGauge { ratio: 0.0, label: None, block: None, style: None })) }
+pub extern "C" fn ratatui_linegauge_new() -> *mut FfiLineGauge { Box::into_raw(Box::new(FfiLineGauge { ratio: 0.0, label: None, label_line: None, block: None, style: None })) }
 
 #[no_mangle]
 pub extern "C" fn ratatui_linegauge_free(g: *mut FfiLineGauge) { if g.is_null() { return; } unsafe { drop(Box::from_raw(g)); } }
@@ -1034,6 +1044,22 @@ pub extern "C" fn ratatui_linegauge_set_label(g: *mut FfiLineGauge, label_utf8: 
     if g.is_null() { return; }
     let gg = unsafe { &mut *g };
     gg.label = if label_utf8.is_null() { None } else { unsafe { CStr::from_ptr(label_utf8) }.to_str().ok().map(|s| s.to_string()) };
+}
+
+// Span-based label for LineGauge (preferred; avoids allocations in hot paths)
+#[no_mangle]
+pub extern "C" fn ratatui_linegauge_set_label_spans(g: *mut FfiLineGauge, spans: *const FfiSpan, len: usize) {
+    if g.is_null() { return; }
+    let gg = unsafe { &mut *g };
+    if spans.is_null() || len == 0 {
+        gg.label_line = Some(Line::default());
+        gg.label = None;
+        return;
+    }
+    if let Some(sp) = spans_from_ffi(spans, len) {
+        gg.label_line = Some(Line::from(sp));
+        gg.label = None; // prefer spans over legacy string label
+    }
 }
 
 #[no_mangle]
@@ -1059,7 +1085,7 @@ pub extern "C" fn ratatui_terminal_draw_linegauge_in(term: *mut FfiTerminal, g: 
         let gg = unsafe { &*g };
         let area = Rect { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
         let mut w = RtLineGauge::default().ratio(gg.ratio as f64);
-        if let Some(label) = &gg.label { w = w.label(label.clone()); }
+        if let Some(lbl) = &gg.label_line { w = w.label(lbl.clone()); } else if let Some(label) = &gg.label { w = w.label(label.clone()); }
         if let Some(st) = &gg.style { w = w.style(st.clone()); }
         if let Some(b) = &gg.block { w = w.block(b.clone()); }
         let res = t.terminal.draw(|frame| { frame.render_widget(w.clone(), area); });
@@ -1074,7 +1100,7 @@ pub extern "C" fn ratatui_headless_render_linegauge(width: u16, height: u16, g: 
     let area = Rect { x: 0, y: 0, width, height };
     let mut buf = Buffer::empty(area);
     let mut w = RtLineGauge::default().ratio(gg.ratio as f64);
-    if let Some(label) = &gg.label { w = w.label(label.clone()); }
+    if let Some(lbl) = &gg.label_line { w = w.label(lbl.clone()); } else if let Some(label) = &gg.label { w = w.label(label.clone()); }
     if let Some(st) = &gg.style { w = w.style(st.clone()); }
     if let Some(b) = &gg.block { w = w.block(b.clone()); }
     ratatui::widgets::Widget::render(w, area, &mut buf);
@@ -2127,6 +2153,21 @@ pub extern "C" fn ratatui_gauge_set_label(g: *mut FfiGauge, label: *const c_char
     gg.label = if label.is_null() { None } else { unsafe { CStr::from_ptr(label) }.to_str().ok().map(|s| s.to_string()) };
 }
 
+// Span-based label for Gauge (preferred)
+#[no_mangle]
+pub extern "C" fn ratatui_gauge_set_label_spans(g: *mut FfiGauge, spans: *const FfiSpan, len: usize) {
+    if g.is_null() { return; }
+    let gg = unsafe { &mut *g };
+    if spans.is_null() || len == 0 { gg.label = Some(String::new()); return; }
+    let slice = unsafe { std::slice::from_raw_parts(spans, len) };
+    let mut s = String::new();
+    for sp in slice.iter() {
+        if sp.text_utf8.is_null() { continue; }
+        if let Ok(txt) = unsafe { CStr::from_ptr(sp.text_utf8) }.to_str() { s.push_str(txt); }
+    }
+    gg.label = Some(s);
+}
+
 #[no_mangle]
 pub extern "C" fn ratatui_gauge_set_styles(g: *mut FfiGauge, style: FfiStyle, label_style: FfiStyle, gauge_style: FfiStyle) {
     if g.is_null() { return; }
@@ -2145,6 +2186,16 @@ pub extern "C" fn ratatui_gauge_set_block_title(g: *mut FfiGauge, title_utf8: *c
         let c_str = unsafe { CStr::from_ptr(title_utf8) };
         if let Ok(title) = c_str.to_str() { block = block.title(title.to_string()); }
     }
+    gg.block = Some(block);
+}
+
+// Span-based block title for Gauge
+#[no_mangle]
+pub extern "C" fn ratatui_gauge_set_block_title_spans(g: *mut FfiGauge, title_spans: *const FfiSpan, title_len: usize, show_border: bool) {
+    if g.is_null() { return; }
+    let gg = unsafe { &mut *g };
+    let mut block = if show_border { Block::default().borders(Borders::ALL) } else { Block::default() };
+    if let Some(sp) = spans_from_ffi(title_spans, title_len) { block = block.title(Line::from(sp)); }
     gg.block = Some(block);
 }
 
@@ -2261,6 +2312,22 @@ pub extern "C" fn ratatui_tabs_set_divider(t: *mut FfiTabs, divider_utf8: *const
     }
 }
 
+// Span-based divider: concatenates span texts; styles are not preserved
+// because ratatui Tabs.divider accepts a single Span.
+#[no_mangle]
+pub extern "C" fn ratatui_tabs_set_divider_spans(t: *mut FfiTabs, spans: *const FfiSpan, len: usize) {
+    if t.is_null() { return; }
+    let tt = unsafe { &mut *t };
+    if spans.is_null() || len == 0 { tt.divider = Some(String::new()); return; }
+    let slice = unsafe { std::slice::from_raw_parts(spans, len) };
+    let mut out = String::new();
+    for s in slice.iter() {
+        if s.text_utf8.is_null() { continue; }
+        if let Ok(txt) = unsafe { CStr::from_ptr(s.text_utf8) }.to_str() { out.push_str(txt); }
+    }
+    tt.divider = Some(out);
+}
+
 #[no_mangle]
 pub extern "C" fn ratatui_terminal_draw_tabs_in(term: *mut FfiTerminal, t: *const FfiTabs, rect: FfiRect) -> bool {
     guard_bool("ratatui_terminal_draw_tabs_in", || {
@@ -2321,12 +2388,43 @@ pub extern "C" fn ratatui_barchart_set_labels(b: *mut FfiBarChart, tsv_utf8: *co
     if let Ok(s) = c_str.to_str() { bc.labels = s.split('\t').map(|x| x.to_string()).collect(); }
 }
 
+// Span-based labels: one FfiLineSpans per label; text is concatenated per label
+#[no_mangle]
+pub extern "C" fn ratatui_barchart_set_labels_spans(b: *mut FfiBarChart, lines: *const FfiLineSpans, len: usize) {
+    if b.is_null() { return; }
+    let bc = unsafe { &mut *b };
+    if lines.is_null() || len == 0 { bc.labels.clear(); return; }
+    let slice = unsafe { std::slice::from_raw_parts(lines, len) };
+    let mut labels: Vec<String> = Vec::with_capacity(len);
+    for ls in slice.iter() {
+        if ls.spans.is_null() || ls.len == 0 { labels.push(String::new()); continue; }
+        let spans = unsafe { std::slice::from_raw_parts(ls.spans, ls.len) };
+        let mut s = String::new();
+        for sp in spans.iter() {
+            if sp.text_utf8.is_null() { continue; }
+            if let Ok(txt) = unsafe { CStr::from_ptr(sp.text_utf8) }.to_str() { s.push_str(txt); }
+        }
+        labels.push(s);
+    }
+    bc.labels = labels;
+}
+
 #[no_mangle]
 pub extern "C" fn ratatui_barchart_set_block_title(b: *mut FfiBarChart, title_utf8: *const c_char, show_border: bool) {
     if b.is_null() { return; }
     let bc = unsafe { &mut *b };
     let mut block = if show_border { Block::default().borders(Borders::ALL) } else { Block::default() };
     if !title_utf8.is_null() { if let Ok(title) = unsafe { CStr::from_ptr(title_utf8) }.to_str() { block = block.title(title.to_string()); }}
+    bc.block = Some(block);
+}
+
+// Span-based block title for BarChart
+#[no_mangle]
+pub extern "C" fn ratatui_barchart_set_block_title_spans(b: *mut FfiBarChart, title_spans: *const FfiSpan, title_len: usize, show_border: bool) {
+    if b.is_null() { return; }
+    let bc = unsafe { &mut *b };
+    let mut block = if show_border { Block::default().borders(Borders::ALL) } else { Block::default() };
+    if let Some(sp) = spans_from_ffi(title_spans, title_len) { block = block.title(Line::from(sp)); }
     bc.block = Some(block);
 }
 
@@ -2943,6 +3041,16 @@ pub extern "C" fn ratatui_table_set_block_title(tbl: *mut FfiTable, title_utf8: 
         let c_str = unsafe { CStr::from_ptr(title_utf8) };
         if let Ok(title) = c_str.to_str() { block = block.title(title.to_string()); }
     }
+    t.block = Some(block);
+}
+
+// Span-based block title for Table
+#[no_mangle]
+pub extern "C" fn ratatui_table_set_block_title_spans(tbl: *mut FfiTable, title_spans: *const FfiSpan, title_len: usize, show_border: bool) {
+    if tbl.is_null() { return; }
+    let t = unsafe { &mut *tbl };
+    let mut block = if show_border { Block::default().borders(Borders::ALL) } else { Block::default() };
+    if let Some(sp) = spans_from_ffi(title_spans, title_len) { block = block.title(Line::from(sp)); }
     t.block = Some(block);
 }
 
