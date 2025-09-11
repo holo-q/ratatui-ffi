@@ -24,11 +24,6 @@ Native C ABI for [Ratatui], shipped as a tiny `cdylib` you can call from C, C#, 
 
 ### Language Bindings
 
-<!-- Bindings badges -->
-[![Python Binding](https://img.shields.io/badge/bindings-Python-3776AB?logo=python&logoColor=white)](https://github.com/holo-q/ratatui-py)
-[![Go Binding](https://img.shields.io/badge/bindings-Go-00ADD8?logo=go&logoColor=white)](https://github.com/holo-q/ratatui-go)
-[![TypeScript Binding](https://img.shields.io/badge/bindings-TypeScript-3178C6?logo=typescript&logoColor=white)](https://github.com/holo-q/ratatui-ts)
-
 - C#: [holo-q/Ratatui.cs](https://github.com/holo-q/Ratatui.cs)
 - Python: [holo-q/ratatui-py](https://github.com/holo-q/ratatui-py)
 - Go: [holo-q/ratatui-go](https://github.com/holo-q/ratatui-go)
