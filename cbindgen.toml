@@ -1,0 +1,23 @@
+language = "C"
+pragma_once = true
+include_guard = "RATATUI_FFI_H"
+includes = ["stdint.h", "stdbool.h", "stddef.h"]
+usize_is_size_t = true
+cpp_compat = true
+
+[export]
+# Only emit the simple FFI types; widget structs remain opaque handles in headers
+include = [
+  "FfiStyle", "FfiSpan", "FfiLineSpans", "FfiCellInfo", "FfiRect",
+  "FfiKeyEvent", "FfiEvent", "FfiColor", "FfiStyleMods", "FfiBorders",
+  "FfiBorderType", "FfiAlign", "FfiHighlightSpacing", "FfiKeyCode",
+  "FfiMouseKind", "FfiMouseButton", "FfiFeatures", "FfiScrollbarOrient"
+]
+
+[parse]
+expand = false
+parse_deps = false
+
+[fn]
+no_return = "noreturn"
+

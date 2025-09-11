@@ -1,4 +1,4 @@
-# ratatui_ffi
+# ratatui_ffi <img src="./logo.webp" alt="ratatui_ffi logo" width="36"/>
 
 ![CI](https://github.com/holo-q/ratatui-ffi/actions/workflows/ci.yml/badge.svg)
 [![GitHub Release](https://img.shields.io/github/v/release/holo-q/ratatui-ffi?logo=github)](https://github.com/holo-q/ratatui-ffi/releases)
@@ -82,6 +82,16 @@ cargo doc -p ratatui
 cargo run --quiet --bin ffi_introspect
 ```
 Outputs grouped export lists and a module summary. Pass `--json` for JSON.
+
+## C Header Generation
+
+This crate exposes a C ABI and ships a cbindgen config to generate a header for C/C++ consumers.
+
+Generate `include/ratatui_ffi.h` with:
+```bash
+bash tools/gen_header.sh
+```
+Then include it from C/C++ bindings. CI can generate and attach it to releases.
 
 ## Hot‑Path Tips
 
