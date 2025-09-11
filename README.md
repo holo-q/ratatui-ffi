@@ -130,6 +130,8 @@ crossterm = "0.27"
 
 - C#: [holo-q/Ratatui.cs](https://github.com/holo-q/Ratatui.cs)
 - Python: [holo-q/ratatui-py](https://github.com/holo-q/ratatui-py)
+- Go: [holo-q/ratatui-go](https://github.com/holo-q/ratatui-go)
+- TypeScript: [holo-q/ratatui-ts](https://github.com/holo-q/ratatui-ts)
 
 ## CI Notes
 
