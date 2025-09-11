@@ -6,89 +6,119 @@
 [![crates.io downloads](https://img.shields.io/crates/d/ratatui_ffi.svg?logo=rust)](https://crates.io/crates/ratatui_ffi)
 [![docs.rs](https://img.shields.io/docsrs/ratatui_ffi?logo=rust)](https://docs.rs/ratatui_ffi)
 
-Native C ABI for [Ratatui], exposing a small cdylib you can consume from C, C#, Python, TypeScript, and others.
+Native C ABI for [Ratatui], shipped as a tiny `cdylib` you can call from C, C#, Python, TypeScript (via FFI), and more. Optimized for hot loops: span‑based setters and batch APIs minimize allocations and marshaling.
 
-## Current Coverage
+## Highlights
 
 - Widgets: Paragraph, List (+state), Table (+state), Tabs, Gauge, LineGauge, BarChart, Sparkline, Chart, Scrollbar, Clear, RatatuiLogo, Canvas.
 - Layout: `layout_split`, `layout_split_ex` (spacing + per‑side margins), `layout_split_ex2` (adds `Constraint::Ratio`).
-- Text/Styles: `Span`, `Line`, per‑span lines; paragraph base style, alignment, wrap(trim), scroll; colors (named/RGB/indexed); modifiers (incl. hidden).
-- Block: per‑side borders, border type, padding, title as spans, title alignment across all block‑bearing widgets.
-- Terminal: init/clear, batched frame render, raw/alt toggles, cursor get/set/show, size, event poll/injection.
-- Headless: text snapshot; compact and full‑fidelity style snapshots; structured cell dump (`FfiCellInfo`).
-- Batching: list items, paragraph lines, table rows with multi‑line cells, datasets; reserve helpers.
+- Text/Styles: `FfiStyle`, `FfiSpan`, `FfiLineSpans`; lines of styled spans; paragraph base style, alignment, wrap(trim), scroll; named/RGB/indexed colors; all modifiers (incl. hidden/blink).
+- Blocks: per‑side borders, border type, padding, title alignment, and title as spans across all block‑bearing widgets.
+- Terminal: init/clear, batched frame render, raw/alt toggles, cursor get/set/show, size, event poll and injection.
+- Headless: ASCII snapshots; compact and extended style dumps; structured cell dump (`FfiCellInfo`).
+- Throughput: list/paragraph/table batching; table multi‑line cells; dataset batching; reserve helpers.
+- Zero‑alloc paths: span‑based label/title/divider setters for hot code paths.
 
-## Language Bindings
-- C#: [holo-q/Ratatui.cs](https://github.com/holo-q/Ratatui.cs)
-- Python: [holo-q/ratatui-py](https://github.com/holo-q/ratatui-py)
+## Span‑Based Setters (Zero‑Alloc Paths)
 
-Status
-- Targets the Ratatui workspace API (0.30 beta series). The crate currently depends on the workspace layout, which is why it has a path dependency to `ratatui`.
-- If you want to build against crates.io instead, switch the dependency to a crates.io version (see below).
+Preferred over UTF‑8 string setters in hot loops. All functions treat `FfiSpan.text_utf8` as NUL‑terminated UTF‑8 without ownership transfer.
 
-Build
+- Tabs: `ratatui_tabs_set_divider_spans(spans, len)`
+- Gauge: `ratatui_gauge_set_label_spans(spans, len)`, `ratatui_gauge_set_block_title_spans(spans, len, show_border)`
+- LineGauge: `ratatui_linegauge_set_label_spans(spans, len)`
+- BarChart: `ratatui_barchart_set_labels_spans(lines, len)`, `ratatui_barchart_set_block_title_spans(spans, len, show_border)`
+- Table: `ratatui_table_set_block_title_spans(spans, len, show_border)`
+- Paragraph/List/Tabs/LineGauge/Chart/Sparkline/Scrollbar/Canvas: `*_set_block_title_spans(spans, len, show_border)`
+
+Notes and limits:
+- Tabs divider: if a single span is provided, style is preserved; otherwise texts are concatenated (ratatui accepts a single `Span`).
+- Gauge label: texts are concatenated; use `ratatui_gauge_set_styles(..., label_style, ...)` for label styling.
+- BarChart labels: per‑label styling is not supported by ratatui; text‑only, same as TSV path.
+
+## FFI Types (Existing)
+
+- `FfiStyle { fg: u32, bg: u32, mods: u16 }` with helpers `ratatui_color_rgb`, `ratatui_color_indexed`.
+- `FfiSpan { text_utf8: *const c_char, style: FfiStyle }`
+- `FfiLineSpans { spans: *const FfiSpan, len: usize }`
+- Structured outputs: `FfiCellInfo` (headless), list/table state types, draw commands for batched frames.
+
+## Feature Bits (Introspection)
+
+Call `ratatui_ffi_feature_bits()` to detect support at runtime. Bits include:
+
+- `SCROLLBAR`, `CANVAS`, `STYLE_DUMP_EX`, `BATCH_TABLE_ROWS`, `BATCH_LIST_ITEMS`, `COLOR_HELPERS`, `AXIS_LABELS`, `SPAN_SETTERS`.
+
+## Quick Start
+
+Build the library:
 ```bash
 cargo build --release
-# produces target/release/libratatui_ffi.so (Linux), .dylib (macOS), or ratatui_ffi.dll (Windows)
+# → target/release/libratatui_ffi.so (Linux), .dylib (macOS), ratatui_ffi.dll (Windows)
 ```
 
-Local FFI introspection
-- Build Ratatui docs once to enable widget coverage:
-  ```bash
-  cargo doc -p ratatui
-  ```
-- Run the introspector to see FFI exports and widget coverage:
-  ```bash
-  cargo run --quiet --bin ffi_introspect
-  ```
-  It reports source/binary exports and groups by prefix, and compares widget coverage against Ratatui’s public docs. No files are generated.
-  It also prints a module‑group summary (terminal/layout/headless/etc.). For JSON, pass `--json`.
+Use from C (example: Gauge label spans):
+```c
+FfiStyle white = { .fg = 0x00000010, .bg = 0, .mods = 0 }; // white named
+FfiSpan spans[2] = {
+  { .text_utf8 = "Load ", .style = white },
+  { .text_utf8 = "80%",    .style = white },
+};
+ratatui_gauge_set_label_spans(gauge, spans, 2);
+```
 
-Headless rendering and style snapshots
-- Text snapshots: render a composed frame of widgets without a terminal:
-  - `ratatui_headless_render_frame(width, height, cmds, len, out_text_utf8)`
-  - `ratatui_headless_render_paragraph`, `ratatui_headless_render_list`, `ratatui_headless_render_table`, etc.
-- Style snapshots: per-cell style dumps for visual testing:
-  - Compact: `ratatui_headless_render_frame_styles` returns rows of "FG2 BG2 MOD4" hex groups (named palette only).
-  - Extended: `ratatui_headless_render_frame_styles_ex` returns rows of "FG8 BG8 MOD4" hex groups where FG/BG use the same 32-bit encoding as `FfiStyle` (named, indexed, or RGB).
-  - Structured cells: `ratatui_headless_render_frame_cells(width,height,cmds,len,out_cells,cap)` to fill an array of `FfiCellInfo { ch, fg, bg, mods }`.
+## Headless Rendering
 
-Throughput helpers
-- Tables with many multi-line cells can be appended in batches to reduce FFI overhead:
-  - Single row: `ratatui_table_append_row_cells_lines(cells, cell_count)`
-  - Batched rows: `ratatui_table_append_rows_cells_lines(rows, row_count)` where each row is an `FfiRowCellsLines` pointing to an array of `FfiCellLines`.
+- Text snapshots: `ratatui_headless_render_frame`, and per‑widget helpers (`_paragraph`, `_list`, `_table`, ...).
+- Style snapshots:
+  - Compact: `ratatui_headless_render_frame_styles` → rows of `FG2 BG2 MOD4` hex (named palette).
+  - Extended: `ratatui_headless_render_frame_styles_ex` → `FG8 BG8 MOD4` hex (`FfiStyle` encoding).
+  - Structured cells: `ratatui_headless_render_frame_cells` → fill array of `FfiCellInfo`.
 
-Canvas (custom drawing)
-- Build custom charts/maps with the Ratatui Canvas via FFI:
-  - Create: `ratatui_canvas_new(x_min, x_max, y_min, y_max)`
-  - Configure: `ratatui_canvas_set_bounds`, `ratatui_canvas_set_background_color`, `ratatui_canvas_set_block_title`/`_adv`
-  - Add shapes: `ratatui_canvas_add_line`, `ratatui_canvas_add_rect`, `ratatui_canvas_add_points`
-  - Render: `ratatui_terminal_draw_canvas_in` or `ratatui_headless_render_canvas`
-  - Notes: for 0.29, points use a default marker (no per-points marker selection).
+## Introspection Tools
 
-Using from C/C#
-- Exported symbols use `extern "C"` and a stable ABI.
-- See the C# wrapper in holo-q/ratatui-cs for a reference P/Invoke layer and SafeHandle pattern.
+Build Ratatui docs (once) to enable widget coverage detection, then run the introspector:
+```bash
+cargo doc -p ratatui
+cargo run --quiet --bin ffi_introspect
+```
+Outputs grouped export lists and a module summary. Pass `--json` for JSON.
 
-Install (Rust)
+## Hot‑Path Tips
+
+- Prefer span‑based setters and batched APIs to avoid allocations and repeated marshaling.
+- Reserve capacity where possible (`ratatui_*_reserve_*`) before large appends.
+- Use headless render snapshots in CI for fast, deterministic tests.
+
+## Runtime Behavior & Logging
+
+- By default raw mode is enabled; use `RATATUI_FFI_NO_RAW=1` to disable; `RATATUI_FFI_ALTSCR=1` to use the alternate screen.
+- Set `RATATUI_FFI_TRACE=1` to trace `ENTER/EXIT` of FFI calls (stderr and optional file).
+- Set `RATATUI_FFI_LOG=<path>` to write logs; truncate per run; use `RATATUI_FFI_LOG_APPEND=1` to append.
+- Functions that interact with the terminal are wrapped in panic guards and validate pointers/rects.
+
+## Install (Rust)
+
 ```bash
 cargo add ratatui_ffi
 ```
 
-Switching to crates.io
-- Current Cargo.toml uses:
-  ```toml
-  ratatui = { path = "../../ratatui/ratatui" }
-  ```
-- To build standalone (without the workspace), replace with a version:
-  ```toml
-  ratatui = "0.29"
-  crossterm = "0.27"
-  ```
-- Note: API has changed in 0.30+ (split crates). If you keep using 0.30 workspace (beta), retain the path dep or pin compatible versions across the split crates.
+### Using crates.io vs workspace
 
-CI (optional)
-- You can add a simple GitHub Actions workflow to build release artifacts for linux-x64, win-x64, osx-x64, osx-arm64 and upload them to releases.
-- See holo-q/ratatui-cs for an example of multi-RID builds and packaging.
+- The repo commonly uses a Ratatui workspace path dependency during development.
+- To build standalone against crates.io, use:
+```toml
+ratatui = "0.29"
+crossterm = "0.27"
+```
+- For 0.30+ (split crates), keep the workspace path or pin compatible versions across split crates.
+
+## Language Bindings
+
+- C#: [holo-q/Ratatui.cs](https://github.com/holo-q/Ratatui.cs)
+- Python: [holo-q/ratatui-py](https://github.com/holo-q/ratatui-py)
+
+## CI Notes
+
+Release builds can produce prebuilt binaries for Linux/macOS/Windows. See the GitHub Actions in this repo and the C# binding repo for multi‑RID examples.
 
 [Ratatui]: https://github.com/ratatui-org/ratatui
