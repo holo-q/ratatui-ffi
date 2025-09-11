@@ -17,6 +17,10 @@ crate-type = ["cdylib"]
 name = "ffi_introspect"
 path = "tools/ffi_introspect.rs"
 
+[[bin]]
+name = "gen_header"
+path = "tools/gen_header.rs"
+
 [features]
 default = ["scrollbar" ]
 # Enable experimental Scrollbar support (requires newer Ratatui API). Off by default for crates.io compatibility.

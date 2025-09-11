@@ -87,8 +87,12 @@ Outputs grouped export lists and a module summary. Pass `--json` for JSON.
 
 This crate exposes a C ABI and ships a cbindgen config to generate a header for C/C++ consumers.
 
-Generate `include/ratatui_ffi.h` with:
+Generate `include/ratatui_ffi.h` with either:
 ```bash
+# Rusty way (requires cbindgen installed):
+cargo run --quiet --bin gen_header
+
+# or Bash helper:
 bash tools/gen_header.sh
 ```
 Then include it from C/C++ bindings. CI can generate and attach it to releases.
