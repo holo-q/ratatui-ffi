@@ -21,8 +21,17 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install cbindgen
+        run: cargo install cbindgen --force
+
       - name: Build cdylib
         run: cargo build --release --verbose
+
+      - name: Generate C header
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash tools/gen_header.sh
 
         # Collect built library into artifacts/
       - name: Collect artifact
@@ -37,6 +46,7 @@ jobs:
           else
             cp target/release/ratatui_ffi.dll artifacts/
           fi
+          cp include/ratatui_ffi.h artifacts/
           ls -la artifacts
 
       - name: Upload artifact
@@ -66,3 +76,4 @@ jobs:
             *.so
             *.dylib
             *.dll
+            ratatui_ffi.h
