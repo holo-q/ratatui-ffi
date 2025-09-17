@@ -21,6 +21,7 @@ use ratatui::widgets::canvas::{Canvas as RtCanvas, Line as RtCanvasLine, Points 
 use std::ffi::{c_char, CString};
 use ratatui::buffer::Buffer;
 use crate::{FfiKeyMods, FfiMouseKind, FfiRect, FfiSpan, FfiStyle, FfiTerminal, INJECTED_EVENTS};
+use crate::{ratatui_block_title_fn, ratatui_block_title_spans_fn, ratatui_block_title_alignment_fn};
 
 #[repr(C)]
 pub struct FfiCanvasLine {
@@ -62,6 +63,10 @@ pub struct FfiCanvas {
     pub rects: Vec<FfiCanvasRect>,
     pub pts: Vec<(Vec<(f64, f64)>, Color)>,
 }
+
+ratatui_block_title_fn!(ratatui_canvas_set_block_title, FfiCanvas);
+ratatui_block_title_spans_fn!(ratatui_canvas_set_block_title_spans, FfiCanvas);
+ratatui_block_title_alignment_fn!(ratatui_canvas_set_block_title_alignment, FfiCanvas);
 
 #[no_mangle]
 pub extern "C" fn ratatui_canvas_new(

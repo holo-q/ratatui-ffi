@@ -303,9 +303,7 @@ pub struct FfiTabsStyles {
 }
 
 // ----- Canvas -----
-
-ratatui_block_title_fn!(ratatui_canvas_set_block_title, FfiCanvas);
-ratatui_block_title_spans_fn!(ratatui_canvas_set_block_title_spans, FfiCanvas);
+// moved to widgets::canvas
 
 #[repr(C)]
 pub struct FfiRect {
@@ -497,7 +495,7 @@ pub enum FfiAlign {
 
 
 
-ratatui_block_adv_fn!(ratatui_linegauge_set_block_adv, FfiLineGauge);
+// moved to widgets::gauge
 
 // moved to widgets::tabs
 
@@ -917,13 +915,8 @@ fn apply_block_title_alignment(b: Block<'static>, align_code: u32) -> Block<'sta
 // moved to widgets::paragraph
 // moved to widgets::list
 
-ratatui_block_title_alignment_fn!(ratatui_linegauge_set_block_title_alignment, FfiLineGauge);
-// moved to widgets::tabs
-ratatui_block_title_alignment_fn!(ratatui_barchart_set_block_title_alignment, FfiBarChart);
-ratatui_block_title_alignment_fn!(ratatui_chart_set_block_title_alignment, FfiChart);
-ratatui_block_title_alignment_fn!(ratatui_sparkline_set_block_title_alignment, FfiSparkline);
-ratatui_block_title_alignment_fn!(ratatui_scrollbar_set_block_title_alignment, FfiScrollbar);
-ratatui_block_title_alignment_fn!(ratatui_canvas_set_block_title_alignment, FfiCanvas);
+// moved to widgets::gauge (linegauge), widgets::chart (barchart/chart), widgets::sparkline,
+// widgets::scrollbar, widgets::canvas
 
 #[repr(u32)]
 pub enum FfiBorderType {
@@ -1065,10 +1058,7 @@ fn style_from_ffi(s: FfiStyle) -> Style {
 
 // ----- LineGauge -----
 
-ratatui_block_title_fn!(ratatui_linegauge_set_block_title, FfiLineGauge);
-ratatui_block_title_spans_fn!(ratatui_linegauge_set_block_title_spans, FfiLineGauge);
-
-ratatui_set_style_fn!(ratatui_linegauge_set_style, FfiLineGauge, style);
+// moved to widgets::gauge (linegauge)
 
 // ----- Clear -----
 

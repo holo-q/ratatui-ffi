@@ -17,7 +17,8 @@
 
 use crate::{
     ratatui_block_adv_fn, ratatui_block_title_fn, ratatui_block_title_spans_fn,
-    ratatui_set_style_fn, ratatui_reserve_vec_fn, FfiLineSpans, FfiRect, FfiStyle, FfiTerminal,
+    ratatui_block_title_alignment_fn, ratatui_set_style_fn, ratatui_reserve_vec_fn,
+    FfiLineSpans, FfiRect, FfiStyle, FfiTerminal,
 };
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Alignment, Constraint, Rect};
@@ -33,6 +34,7 @@ use std::ffi::{c_char, CStr, CString};
 ratatui_block_title_fn!(ratatui_barchart_set_block_title, FfiBarChart);
 ratatui_block_title_spans_fn!(ratatui_barchart_set_block_title_spans, FfiBarChart);
 ratatui_block_adv_fn!(ratatui_barchart_set_block_adv, FfiBarChart);
+ratatui_block_title_alignment_fn!(ratatui_barchart_set_block_title_alignment, FfiBarChart);
 
 // ----- Chart -----
 
@@ -40,6 +42,7 @@ ratatui_set_style_fn!(ratatui_chart_set_style, FfiChart, chart_style);
 ratatui_block_title_fn!(ratatui_chart_set_block_title, FfiChart);
 ratatui_block_title_spans_fn!(ratatui_chart_set_block_title_spans, FfiChart);
 ratatui_block_adv_fn!(ratatui_chart_set_block_adv, FfiChart);
+ratatui_block_title_alignment_fn!(ratatui_chart_set_block_title_alignment, FfiChart);
 
 #[no_mangle]
 pub extern "C" fn ratatui_barchart_new() -> *mut FfiBarChart {

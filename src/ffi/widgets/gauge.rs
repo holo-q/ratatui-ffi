@@ -70,6 +70,11 @@ crate::ratatui_block_title_fn!(ratatui_gauge_set_block_title, FfiGauge);
 crate::ratatui_block_title_spans_fn!(ratatui_gauge_set_block_title_spans, FfiGauge);
 crate::ratatui_block_title_alignment_fn!(ratatui_gauge_set_block_title_alignment, FfiGauge);
 crate::ratatui_block_adv_fn!(ratatui_gauge_set_block_adv, FfiGauge);
+crate::ratatui_block_title_fn!(ratatui_linegauge_set_block_title, FfiLineGauge);
+crate::ratatui_block_title_spans_fn!(ratatui_linegauge_set_block_title_spans, FfiLineGauge);
+crate::ratatui_block_title_alignment_fn!(ratatui_linegauge_set_block_title_alignment, FfiLineGauge);
+crate::ratatui_block_adv_fn!(ratatui_linegauge_set_block_adv, FfiLineGauge);
+crate::ratatui_set_style_fn!(ratatui_linegauge_set_style, FfiLineGauge, style);
 
 #[no_mangle]
 pub extern "C" fn ratatui_terminal_draw_gauge_in(

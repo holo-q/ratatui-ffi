@@ -13,8 +13,8 @@
 // use crate::*; // enable when moving implementations
 
 use crate::{
-    ratatui_block_adv_fn, ratatui_block_title_fn, ratatui_block_title_spans_fn, FfiRect,
-    FfiTerminal,
+    ratatui_block_adv_fn, ratatui_block_title_fn, ratatui_block_title_spans_fn,
+    ratatui_block_title_alignment_fn, FfiRect, FfiTerminal,
 };
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -38,6 +38,7 @@ ratatui_block_title_spans_fn!(ratatui_scrollbar_set_block_title_spans, FfiScroll
 #[cfg(feature = "scrollbar")]
 #[cfg_attr(docsrs, doc(cfg(feature = "scrollbar")))]
 ratatui_block_adv_fn!(ratatui_scrollbar_set_block_adv, FfiScrollbar);
+ratatui_block_title_alignment_fn!(ratatui_scrollbar_set_block_title_alignment, FfiScrollbar);
 
 #[cfg(feature = "scrollbar")]
 #[cfg_attr(docsrs, doc(cfg(feature = "scrollbar")))]

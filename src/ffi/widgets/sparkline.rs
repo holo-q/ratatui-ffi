@@ -13,7 +13,7 @@
 
 use crate::{
     ratatui_block_adv_fn, ratatui_block_title_fn, ratatui_block_title_spans_fn,
-    ratatui_set_style_fn, FfiRect, FfiTerminal,
+    ratatui_block_title_alignment_fn, ratatui_set_style_fn, FfiRect, FfiTerminal,
 };
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -27,6 +27,7 @@ ratatui_set_style_fn!(ratatui_sparkline_set_style, FfiSparkline, style);
 ratatui_block_title_fn!(ratatui_sparkline_set_block_title, FfiSparkline);
 ratatui_block_title_spans_fn!(ratatui_sparkline_set_block_title_spans, FfiSparkline);
 ratatui_block_adv_fn!(ratatui_sparkline_set_block_adv, FfiSparkline);
+ratatui_block_title_alignment_fn!(ratatui_sparkline_set_block_title_alignment, FfiSparkline);
 
 #[repr(C)]
 pub struct FfiSparkline {
