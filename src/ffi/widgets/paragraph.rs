@@ -121,6 +121,8 @@ crate::ratatui_set_style_fn!(ratatui_paragraph_set_style, FfiParagraph, base_sty
 crate::ratatui_block_title_fn!(ratatui_paragraph_set_block_title, FfiParagraph);
 crate::ratatui_block_title_spans_fn!(ratatui_paragraph_set_block_title_spans, FfiParagraph);
 crate::ratatui_block_adv_fn!(ratatui_paragraph_set_block_adv, FfiParagraph);
+ratatui_reserve_vec_fn!(ratatui_paragraph_reserve_lines, FfiParagraph, lines);
+crate::ratatui_block_title_alignment_fn!(ratatui_paragraph_set_block_title_alignment, FfiParagraph);
 
 #[no_mangle]
 pub extern "C" fn ratatui_paragraph_free(para: *mut FfiParagraph) {
@@ -128,3 +130,117 @@ pub extern "C" fn ratatui_paragraph_free(para: *mut FfiParagraph) {
     unsafe { drop(Box::from_raw(para)) };
 }
 
+#[repr(C)]
+pub struct FfiParagraph {
+    pub lines: Vec<Line<'static>>,     // content
+    pub block: Option<Block<'static>>, // optional block with borders/title
+    pub align: Option<Alignment>,
+    pub wrap_trim: Option<bool>,
+    pub scroll_x: Option<u16>,
+    pub scroll_y: Option<u16>,
+    pub base_style: Option<Style>,
+}
+
+#[no_mangle]
+pub extern "C" fn ratatui_paragraph_append_line(
+    para: *mut FfiParagraph,
+    text_utf8: *const std::ffi::c_char,
+    style: FfiStyle,
+) {
+    if para.is_null() || text_utf8.is_null() {
+        return;
+    }
+    let p = unsafe { &mut *para };
+    let c_str = unsafe { CStr::from_ptr(text_utf8) };
+    if let Ok(s) = c_str.to_str() {
+        let st = style_from_ffi(style);
+        p.lines.push(Line::from(Span::styled(s.to_string(), st)));
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn ratatui_terminal_draw_paragraph(
+    term: *mut FfiTerminal,
+    para: *const FfiParagraph,
+) -> bool {
+    guard_bool("ratatui_terminal_draw_paragraph", || {
+        if term.is_null() || para.is_null() {
+            return false;
+        }
+        let t = unsafe { &mut *term };
+        let p = unsafe { &*para };
+        let lines = p.lines.clone();
+        let mut widget = Paragraph::new(lines);
+        if let Some(a) = p.align {
+            widget = widget.alignment(a);
+        }
+        if let Some(trim) = p.wrap_trim {
+            widget = widget.wrap(ratatui::widgets::Wrap { trim });
+        }
+        if let (Some(sx), Some(sy)) = (p.scroll_x, p.scroll_y) {
+            widget = widget.scroll((sx, sy));
+        }
+        if let Some(st) = &p.base_style {
+            widget = widget.style(st.clone());
+        }
+        if let Some(b) = &p.block {
+            widget = widget.block(b.clone());
+        }
+        let res = t.terminal.draw(|frame| {
+            let area: Rect = frame.area();
+            frame.render_widget(widget.clone(), area);
+        });
+        res.is_ok()
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn ratatui_terminal_draw_paragraph_in(
+    term: *mut FfiTerminal,
+    para: *const FfiParagraph,
+    rect: FfiRect,
+) -> bool {
+    guard_bool("ratatui_terminal_draw_paragraph_in", || {
+        if term.is_null() || para.is_null() {
+            return false;
+        }
+        let t = unsafe { &mut *term };
+        let p = unsafe { &*para };
+        let area = Rect {
+            x: rect.x,
+            y: rect.y,
+            width: rect.width,
+            height: rect.height,
+        };
+        let lines = p.lines.clone();
+        let mut widget = Paragraph::new(lines);
+        if let Some(a) = p.align {
+            widget = widget.alignment(a);
+        }
+        if let Some(trim) = p.wrap_trim {
+            widget = widget.wrap(ratatui::widgets::Wrap { trim });
+        }
+        if let (Some(sx), Some(sy)) = (p.scroll_x, p.scroll_y) {
+            widget = widget.scroll((sx, sy));
+        }
+        if let Some(st) = &p.base_style {
+            widget = widget.style(st.clone());
+        }
+        if let Some(b) = &p.block {
+            widget = widget.block(b.clone());
+        }
+        let res = t.terminal.draw(|frame| {
+            frame.render_widget(widget.clone(), area);
+        });
+        res.is_ok()
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn ratatui_terminal_set_viewport_area(
+    term: *mut FfiTerminal,
+    rect: FfiRect,
+) -> bool {
+    let _ = (term, rect);
+    false
+}

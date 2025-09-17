@@ -115,3 +115,222 @@ pub extern "C" fn ratatui_headless_render_gauge(
     for y in 0..height { for x in 0..width { s.push_str(buf[(x, y)].symbol()); } if y + 1 < height { s.push('\n'); } }
     match CString::new(s) { Ok(cstr) => { unsafe { *out_text_utf8 = cstr.into_raw(); } true }, Err(_) => false }
 }
+
+#[repr(C)]
+pub struct FfiGauge {
+    pub ratio: f32,
+    pub label: Option<String>,
+    pub block: Option<Block<'static>>,
+    pub style: Option<Style>,
+    pub label_style: Option<Style>,
+    pub gauge_style: Option<Style>,
+}
+
+#[repr(C)]
+pub struct FfiLineGauge {
+    pub ratio: f32,
+    pub label: Option<String>,
+    pub label_line: Option<Line<'static>>,
+    pub block: Option<Block<'static>>,
+    pub style: Option<Style>,
+}
+
+#[no_mangle]
+pub extern "C" fn ratatui_linegauge_new() -> *mut FfiLineGauge {
+    Box::into_raw(Box::new(FfiLineGauge {
+        ratio: 0.0,
+        label: None,
+        label_line: None,
+        block: None,
+        style: None,
+    }))
+}
+
+#[no_mangle]
+pub extern "C" fn ratatui_linegauge_free(g: *mut FfiLineGauge) {
+    if g.is_null() {
+        return;
+    }
+    unsafe {
+        drop(Box::from_raw(g));
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn ratatui_linegauge_set_ratio(g: *mut FfiLineGauge, ratio: f32) {
+    if g.is_null() {
+        return;
+    }
+    unsafe {
+        (&mut *g).ratio = ratio;
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn ratatui_linegauge_set_label(g: *mut FfiLineGauge, label_utf8: *const std::ffi::c_char) {
+    if g.is_null() {
+        return;
+    }
+    let gg = unsafe { &mut *g };
+    gg.label = if label_utf8.is_null() {
+        None
+    } else {
+        unsafe { CStr::from_ptr(label_utf8) }
+            .to_str()
+            .ok()
+            .map(|s| s.to_string())
+    };
+}
+
+// Span-based label for LineGauge (preferred; avoids allocations in hot paths)
+#[no_mangle]
+pub extern "C" fn ratatui_linegauge_set_label_spans(
+    g: *mut FfiLineGauge,
+    spans: *const FfiSpan,
+    len: usize,
+) {
+    if g.is_null() {
+        return;
+    }
+    let gg = unsafe { &mut *g };
+    if spans.is_null() || len == 0 {
+        gg.label_line = Some(Line::default());
+        gg.label = None;
+        return;
+    }
+    if let Some(sp) = spans_from_ffi(spans, len) {
+        gg.label_line = Some(Line::from(sp));
+        gg.label = None; // prefer spans over legacy string label
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn ratatui_terminal_draw_linegauge_in(
+    term: *mut FfiTerminal,
+    g: *const FfiLineGauge,
+    rect: FfiRect,
+) -> bool {
+    guard_bool("ratatui_terminal_draw_linegauge_in", || {
+        if term.is_null() || g.is_null() {
+            return false;
+        }
+        let t = unsafe { &mut *term };
+        let gg = unsafe { &*g };
+        let area = Rect {
+            x: rect.x,
+            y: rect.y,
+            width: rect.width,
+            height: rect.height,
+        };
+        let mut w = RtLineGauge::default().ratio(gg.ratio as f64);
+        if let Some(lbl) = &gg.label_line {
+            w = w.label(lbl.clone());
+        } else if let Some(label) = &gg.label {
+            w = w.label(label.clone());
+        }
+        if let Some(st) = &gg.style {
+            w = w.style(st.clone());
+        }
+        if let Some(b) = &gg.block {
+            w = w.block(b.clone());
+        }
+        let res = t.terminal.draw(|frame| {
+            frame.render_widget(w.clone(), area);
+        });
+        res.is_ok()
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn ratatui_headless_render_linegauge(
+	width: u16,
+	height: u16,
+	g: *const FfiLineGauge,
+	out_text_utf8: *mut *mut std::ffi::c_char,
+) -> bool {
+    if g.is_null() || out_text_utf8.is_null() {
+        return false;
+    }
+    let gg = unsafe { &*g };
+    let area = Rect {
+        x: 0,
+        y: 0,
+        width,
+        height,
+    };
+    let mut buf = Buffer::empty(area);
+    let mut w = RtLineGauge::default().ratio(gg.ratio as f64);
+    if let Some(lbl) = &gg.label_line {
+        w = w.label(lbl.clone());
+    } else if let Some(label) = &gg.label {
+        w = w.label(label.clone());
+    }
+    if let Some(st) = &gg.style {
+        w = w.style(st.clone());
+    }
+    if let Some(b) = &gg.block {
+        w = w.block(b.clone());
+    }
+    ratatui::widgets::Widget::render(w, area, &mut buf);
+    let mut s = String::new();
+    for y in 0..height {
+        for x in 0..width {
+            let cell = &buf[(x, y)];
+            s.push_str(cell.symbol());
+        }
+        if y + 1 < height {
+            s.push('\n');
+        }
+    }
+    match CString::new(s) {
+        Ok(cstr) => {
+            unsafe {
+                *out_text_utf8 = cstr.into_raw();
+            }
+            true
+        }
+        Err(_) => false,
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn ratatui_inject_key(code: u32, ch: u32, mods: u8) {
+    let ke = CtKeyEvent::new(
+        match code {
+            x if x == FfiKeyCode::Char as u32 => {
+                CtKeyCode::Char(char::from_u32(ch).unwrap_or('\0'))
+            }
+            x if x == FfiKeyCode::Enter as u32 => CtKeyCode::Enter,
+            x if x == FfiKeyCode::Left as u32 => CtKeyCode::Left,
+            x if x == FfiKeyCode::Right as u32 => CtKeyCode::Right,
+            x if x == FfiKeyCode::Up as u32 => CtKeyCode::Up,
+            x if x == FfiKeyCode::Down as u32 => CtKeyCode::Down,
+            x if x == FfiKeyCode::Esc as u32 => CtKeyCode::Esc,
+            x if x == FfiKeyCode::Backspace as u32 => CtKeyCode::Backspace,
+            x if x == FfiKeyCode::Tab as u32 => CtKeyCode::Tab,
+            x if x == FfiKeyCode::Delete as u32 => CtKeyCode::Delete,
+            x if x == FfiKeyCode::Home as u32 => CtKeyCode::Home,
+            x if x == FfiKeyCode::End as u32 => CtKeyCode::End,
+            x if x == FfiKeyCode::PageUp as u32 => CtKeyCode::PageUp,
+            x if x == FfiKeyCode::PageDown as u32 => CtKeyCode::PageDown,
+            x if x == FfiKeyCode::Insert as u32 => CtKeyCode::Insert,
+            _ => CtKeyCode::Null,
+        },
+        CtKeyModifiers::from_bits_truncate(
+            (if (mods & FfiKeyMods::SHIFT.bits()) != 0 {
+                CtKeyModifiers::SHIFT.bits()
+            } else {
+                0
+            }) | (if (mods & FfiKeyMods::ALT.bits()) != 0 {
+                CtKeyModifiers::ALT.bits()
+            } else {
+                0
+            }) | (if (mods & FfiKeyMods::CTRL.bits()) != 0 {
+                CtKeyModifiers::CONTROL.bits()
+            } else {
+                0
+            }),
+        ),
+    );
+    INJECTED_EVENTS.lock().unwrap().push_back(CtEvent::Key(ke));
+}
