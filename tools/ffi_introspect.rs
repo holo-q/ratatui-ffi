@@ -112,6 +112,11 @@ fn extract_source_exports(src: &str) -> Vec<String> {
         "ratatui_const_struct_getter!(",
         "ratatui_const_color_u32_getter!(",
         "ratatui_const_palette_u32_getter!(",
+        "ratatui_block_title_fn!(",
+        "ratatui_block_title_spans_fn!(",
+        "ratatui_set_style_fn!(",
+        "ratatui_reserve_vec_fn!(",
+        "ratatui_set_selected_i32_fn!(",
     ] {
         let mut s = 0usize;
         while let Some(idx) = src[s..].find(pat) {

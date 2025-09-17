@@ -490,51 +490,8 @@ pub extern "C" fn ratatui_canvas_set_background_color(c: *mut FfiCanvas, color: 
     }
 }
 
-#[no_mangle]
-pub extern "C" fn ratatui_canvas_set_block_title(
-    c: *mut FfiCanvas,
-    title_utf8: *const c_char,
-    show_border: bool,
-) {
-    if c.is_null() {
-        return;
-    }
-    let cv = unsafe { &mut *c };
-    let mut block = if show_border {
-        Block::default().borders(Borders::ALL)
-    } else {
-        Block::default()
-    };
-    if !title_utf8.is_null() {
-        if let Ok(title) = unsafe { CStr::from_ptr(title_utf8) }.to_str() {
-            block = block.title(title.to_string());
-        }
-    }
-    cv.block = Some(block);
-}
-
-// Span-based block title for Canvas
-#[no_mangle]
-pub extern "C" fn ratatui_canvas_set_block_title_spans(
-    c: *mut FfiCanvas,
-    title_spans: *const FfiSpan,
-    title_len: usize,
-    show_border: bool,
-) {
-    if c.is_null() {
-        return;
-    }
-    let cv = unsafe { &mut *c };
-    let mut block = if show_border {
-        Block::default().borders(Borders::ALL)
-    } else {
-        Block::default()
-    };
-    if let Some(sp) = spans_from_ffi(title_spans, title_len) {
-        block = block.title(Line::from(sp));
-    }
-    cv.block = Some(block);
-}
+crate::ratatui_block_title_fn!(ratatui_canvas_set_block_title, FfiCanvas);
+crate::ratatui_block_title_spans_fn!(ratatui_canvas_set_block_title_spans, FfiCanvas);
 
 #[no_mangle]
 pub extern "C" fn ratatui_canvas_set_block_adv(
@@ -1038,52 +995,8 @@ pub extern "C" fn ratatui_paragraph_line_break(para: *mut FfiParagraph) {
     p.lines.push(Line::default());
 }
 
-#[no_mangle]
-pub extern "C" fn ratatui_paragraph_set_block_title(
-    para: *mut FfiParagraph,
-    title_utf8: *const c_char,
-    show_border: bool,
-) {
-    if para.is_null() {
-        return;
-    }
-    let p = unsafe { &mut *para };
-    let mut block = if show_border {
-        Block::default().borders(Borders::ALL)
-    } else {
-        Block::default()
-    };
-    if !title_utf8.is_null() {
-        let c_str = unsafe { CStr::from_ptr(title_utf8) };
-        if let Ok(title) = c_str.to_str() {
-            block = block.title(title.to_string());
-        }
-    }
-    p.block = Some(block);
-}
-
-// Span-based block title for Paragraph
-#[no_mangle]
-pub extern "C" fn ratatui_paragraph_set_block_title_spans(
-    para: *mut FfiParagraph,
-    title_spans: *const FfiSpan,
-    title_len: usize,
-    show_border: bool,
-) {
-    if para.is_null() {
-        return;
-    }
-    let p = unsafe { &mut *para };
-    let mut block = if show_border {
-        Block::default().borders(Borders::ALL)
-    } else {
-        Block::default()
-    };
-    if let Some(sp) = spans_from_ffi(title_spans, title_len) {
-        block = block.title(Line::from(sp));
-    }
-    p.block = Some(block);
-}
+crate::ratatui_block_title_fn!(ratatui_paragraph_set_block_title, FfiParagraph);
+crate::ratatui_block_title_spans_fn!(ratatui_paragraph_set_block_title_spans, FfiParagraph);
 
 #[repr(u32)]
 pub enum FfiAlign {
@@ -1124,14 +1037,7 @@ pub extern "C" fn ratatui_paragraph_set_scroll(para: *mut FfiParagraph, x: u16, 
     p.scroll_y = Some(y);
 }
 
-#[no_mangle]
-pub extern "C" fn ratatui_paragraph_set_style(para: *mut FfiParagraph, style: FfiStyle) {
-    if para.is_null() {
-        return;
-    }
-    let p = unsafe { &mut *para };
-    p.base_style = Some(style_from_ffi(style));
-}
+crate::ratatui_set_style_fn!(ratatui_paragraph_set_style, FfiParagraph, base_style);
 
 crate::ratatui_block_adv_fn!(ratatui_paragraph_set_block_adv, FfiParagraph);
 
@@ -1810,62 +1716,10 @@ pub extern "C" fn ratatui_linegauge_set_label_spans(
     }
 }
 
-#[no_mangle]
-pub extern "C" fn ratatui_linegauge_set_block_title(
-    g: *mut FfiLineGauge,
-    title_utf8: *const c_char,
-    show_border: bool,
-) {
-    if g.is_null() {
-        return;
-    }
-    let gg = unsafe { &mut *g };
-    let mut block = if show_border {
-        Block::default().borders(Borders::ALL)
-    } else {
-        Block::default()
-    };
-    if !title_utf8.is_null() {
-        let c_str = unsafe { CStr::from_ptr(title_utf8) };
-        if let Ok(title) = c_str.to_str() {
-            block = block.title(title.to_string());
-        }
-    }
-    gg.block = Some(block);
-}
+crate::ratatui_block_title_fn!(ratatui_linegauge_set_block_title, FfiLineGauge);
+crate::ratatui_block_title_spans_fn!(ratatui_linegauge_set_block_title_spans, FfiLineGauge);
 
-// Span-based block title for LineGauge
-#[no_mangle]
-pub extern "C" fn ratatui_linegauge_set_block_title_spans(
-    g: *mut FfiLineGauge,
-    title_spans: *const FfiSpan,
-    title_len: usize,
-    show_border: bool,
-) {
-    if g.is_null() {
-        return;
-    }
-    let gg = unsafe { &mut *g };
-    let mut block = if show_border {
-        Block::default().borders(Borders::ALL)
-    } else {
-        Block::default()
-    };
-    if let Some(sp) = spans_from_ffi(title_spans, title_len) {
-        block = block.title(Line::from(sp));
-    }
-    gg.block = Some(block);
-}
-
-#[no_mangle]
-pub extern "C" fn ratatui_linegauge_set_style(g: *mut FfiLineGauge, style: FfiStyle) {
-    if g.is_null() {
-        return;
-    }
-    unsafe {
-        (&mut *g).style = Some(style_from_ffi(style));
-    }
-}
+crate::ratatui_set_style_fn!(ratatui_linegauge_set_style, FfiLineGauge, style);
 
 #[no_mangle]
 pub extern "C" fn ratatui_terminal_draw_linegauge_in(
@@ -3734,19 +3588,7 @@ pub extern "C" fn ratatui_list_state_free(st: *mut FfiListState) {
     }
 }
 
-#[no_mangle]
-pub extern "C" fn ratatui_list_state_set_selected(st: *mut FfiListState, selected: i32) {
-    if st.is_null() {
-        return;
-    }
-    unsafe {
-        (&mut *st).selected = if selected < 0 {
-            None
-        } else {
-            Some(selected as usize)
-        };
-    }
-}
+crate::ratatui_set_selected_i32_fn!(ratatui_list_state_set_selected, FfiListState, selected);
 
 #[no_mangle]
 pub extern "C" fn ratatui_list_state_set_offset(st: *mut FfiListState, offset: usize) {
@@ -3928,74 +3770,12 @@ pub extern "C" fn ratatui_list_append_items_spans(
     }
 }
 
-#[no_mangle]
-pub extern "C" fn ratatui_list_set_block_title(
-    lst: *mut FfiList,
-    title_utf8: *const c_char,
-    show_border: bool,
-) {
-    if lst.is_null() {
-        return;
-    }
-    let l = unsafe { &mut *lst };
-    let mut block = if show_border {
-        Block::default().borders(Borders::ALL)
-    } else {
-        Block::default()
-    };
-    if !title_utf8.is_null() {
-        let c_str = unsafe { CStr::from_ptr(title_utf8) };
-        if let Ok(title) = c_str.to_str() {
-            block = block.title(title.to_string());
-        }
-    }
-    l.block = Some(block);
-}
+crate::ratatui_block_title_fn!(ratatui_list_set_block_title, FfiList);
+crate::ratatui_block_title_spans_fn!(ratatui_list_set_block_title_spans, FfiList);
 
-// Span-based block title for List
-#[no_mangle]
-pub extern "C" fn ratatui_list_set_block_title_spans(
-    lst: *mut FfiList,
-    title_spans: *const FfiSpan,
-    title_len: usize,
-    show_border: bool,
-) {
-    if lst.is_null() {
-        return;
-    }
-    let l = unsafe { &mut *lst };
-    let mut block = if show_border {
-        Block::default().borders(Borders::ALL)
-    } else {
-        Block::default()
-    };
-    if let Some(sp) = spans_from_ffi(title_spans, title_len) {
-        block = block.title(Line::from(sp));
-    }
-    l.block = Some(block);
-}
+crate::ratatui_set_selected_i32_fn!(ratatui_list_set_selected, FfiList, selected);
 
-#[no_mangle]
-pub extern "C" fn ratatui_list_set_selected(lst: *mut FfiList, selected: i32) {
-    if lst.is_null() {
-        return;
-    }
-    let l = unsafe { &mut *lst };
-    l.selected = if selected < 0 {
-        None
-    } else {
-        Some(selected as usize)
-    };
-}
-
-#[no_mangle]
-pub extern "C" fn ratatui_list_set_highlight_style(lst: *mut FfiList, style: FfiStyle) {
-    if lst.is_null() {
-        return;
-    }
-    let l = unsafe { &mut *lst };
-    l.highlight_style = Some(style_from_ffi(style));
-}
+crate::ratatui_set_style_fn!(ratatui_list_set_highlight_style, FfiList, highlight_style);
 
 #[no_mangle]
 pub extern "C" fn ratatui_list_set_highlight_symbol(lst: *mut FfiList, sym_utf8: *const c_char) {
@@ -4183,52 +3963,8 @@ pub extern "C" fn ratatui_gauge_set_styles(
     gg.gauge_style = Some(style_from_ffi(gauge_style));
 }
 
-#[no_mangle]
-pub extern "C" fn ratatui_gauge_set_block_title(
-    g: *mut FfiGauge,
-    title_utf8: *const c_char,
-    show_border: bool,
-) {
-    if g.is_null() {
-        return;
-    }
-    let gg = unsafe { &mut *g };
-    let mut block = if show_border {
-        Block::default().borders(Borders::ALL)
-    } else {
-        Block::default()
-    };
-    if !title_utf8.is_null() {
-        let c_str = unsafe { CStr::from_ptr(title_utf8) };
-        if let Ok(title) = c_str.to_str() {
-            block = block.title(title.to_string());
-        }
-    }
-    gg.block = Some(block);
-}
-
-// Span-based block title for Gauge
-#[no_mangle]
-pub extern "C" fn ratatui_gauge_set_block_title_spans(
-    g: *mut FfiGauge,
-    title_spans: *const FfiSpan,
-    title_len: usize,
-    show_border: bool,
-) {
-    if g.is_null() {
-        return;
-    }
-    let gg = unsafe { &mut *g };
-    let mut block = if show_border {
-        Block::default().borders(Borders::ALL)
-    } else {
-        Block::default()
-    };
-    if let Some(sp) = spans_from_ffi(title_spans, title_len) {
-        block = block.title(Line::from(sp));
-    }
-    gg.block = Some(block);
-}
+crate::ratatui_block_title_fn!(ratatui_gauge_set_block_title, FfiGauge);
+crate::ratatui_block_title_spans_fn!(ratatui_gauge_set_block_title_spans, FfiGauge);
 
 #[no_mangle]
 pub extern "C" fn ratatui_terminal_draw_gauge_in(
@@ -4427,52 +4163,8 @@ pub extern "C" fn ratatui_tabs_set_selected(t: *mut FfiTabs, selected: u16) {
     }
 }
 
-#[no_mangle]
-pub extern "C" fn ratatui_tabs_set_block_title(
-    t: *mut FfiTabs,
-    title_utf8: *const c_char,
-    show_border: bool,
-) {
-    if t.is_null() {
-        return;
-    }
-    let tt = unsafe { &mut *t };
-    let mut block = if show_border {
-        Block::default().borders(Borders::ALL)
-    } else {
-        Block::default()
-    };
-    if !title_utf8.is_null() {
-        let c_str = unsafe { CStr::from_ptr(title_utf8) };
-        if let Ok(title) = c_str.to_str() {
-            block = block.title(title.to_string());
-        }
-    }
-    tt.block = Some(block);
-}
-
-// Span-based block title for Tabs
-#[no_mangle]
-pub extern "C" fn ratatui_tabs_set_block_title_spans(
-    t: *mut FfiTabs,
-    title_spans: *const FfiSpan,
-    title_len: usize,
-    show_border: bool,
-) {
-    if t.is_null() {
-        return;
-    }
-    let tt = unsafe { &mut *t };
-    let mut block = if show_border {
-        Block::default().borders(Borders::ALL)
-    } else {
-        Block::default()
-    };
-    if let Some(sp) = spans_from_ffi(title_spans, title_len) {
-        block = block.title(Line::from(sp));
-    }
-    tt.block = Some(block);
-}
+crate::ratatui_block_title_fn!(ratatui_tabs_set_block_title, FfiTabs);
+crate::ratatui_block_title_spans_fn!(ratatui_tabs_set_block_title_spans, FfiTabs);
 
 #[no_mangle]
 pub extern "C" fn ratatui_tabs_set_styles(
@@ -4740,51 +4432,8 @@ pub extern "C" fn ratatui_barchart_set_labels_spans(
     bc.labels = labels;
 }
 
-#[no_mangle]
-pub extern "C" fn ratatui_barchart_set_block_title(
-    b: *mut FfiBarChart,
-    title_utf8: *const c_char,
-    show_border: bool,
-) {
-    if b.is_null() {
-        return;
-    }
-    let bc = unsafe { &mut *b };
-    let mut block = if show_border {
-        Block::default().borders(Borders::ALL)
-    } else {
-        Block::default()
-    };
-    if !title_utf8.is_null() {
-        if let Ok(title) = unsafe { CStr::from_ptr(title_utf8) }.to_str() {
-            block = block.title(title.to_string());
-        }
-    }
-    bc.block = Some(block);
-}
-
-// Span-based block title for BarChart
-#[no_mangle]
-pub extern "C" fn ratatui_barchart_set_block_title_spans(
-    b: *mut FfiBarChart,
-    title_spans: *const FfiSpan,
-    title_len: usize,
-    show_border: bool,
-) {
-    if b.is_null() {
-        return;
-    }
-    let bc = unsafe { &mut *b };
-    let mut block = if show_border {
-        Block::default().borders(Borders::ALL)
-    } else {
-        Block::default()
-    };
-    if let Some(sp) = spans_from_ffi(title_spans, title_len) {
-        block = block.title(Line::from(sp));
-    }
-    bc.block = Some(block);
-}
+crate::ratatui_block_title_fn!(ratatui_barchart_set_block_title, FfiBarChart);
+crate::ratatui_block_title_spans_fn!(ratatui_barchart_set_block_title_spans, FfiBarChart);
 
 crate::ratatui_block_adv_fn!(ratatui_barchart_set_block_adv, FfiBarChart);
 
@@ -5134,14 +4783,7 @@ pub extern "C" fn ratatui_chart_set_hidden_legend_constraints(
     ch.hidden_legend_values = Some([vals[0], vals[1]]);
 }
 
-#[no_mangle]
-pub extern "C" fn ratatui_chart_set_style(c: *mut FfiChart, style: FfiStyle) {
-    if c.is_null() {
-        return;
-    }
-    let ch = unsafe { &mut *c };
-    ch.chart_style = Some(style_from_ffi(style));
-}
+crate::ratatui_set_style_fn!(ratatui_chart_set_style, FfiChart, chart_style);
 
 #[no_mangle]
 pub extern "C" fn ratatui_chart_set_axis_styles(
@@ -5235,52 +4877,8 @@ pub extern "C" fn ratatui_chart_set_labels_alignment(c: *mut FfiChart, x_align: 
     });
 }
 
-#[no_mangle]
-pub extern "C" fn ratatui_chart_set_block_title(
-    c: *mut FfiChart,
-    title_utf8: *const c_char,
-    show_border: bool,
-) {
-    if c.is_null() {
-        return;
-    }
-    let ch = unsafe { &mut *c };
-    let mut block = if show_border {
-        Block::default().borders(Borders::ALL)
-    } else {
-        Block::default()
-    };
-    if !title_utf8.is_null() {
-        let c_str = unsafe { CStr::from_ptr(title_utf8) };
-        if let Ok(title) = c_str.to_str() {
-            block = block.title(title.to_string());
-        }
-    }
-    ch.block = Some(block);
-}
-
-// Span-based block title for Chart
-#[no_mangle]
-pub extern "C" fn ratatui_chart_set_block_title_spans(
-    c: *mut FfiChart,
-    title_spans: *const FfiSpan,
-    title_len: usize,
-    show_border: bool,
-) {
-    if c.is_null() {
-        return;
-    }
-    let ch = unsafe { &mut *c };
-    let mut block = if show_border {
-        Block::default().borders(Borders::ALL)
-    } else {
-        Block::default()
-    };
-    if let Some(sp) = spans_from_ffi(title_spans, title_len) {
-        block = block.title(Line::from(sp));
-    }
-    ch.block = Some(block);
-}
+crate::ratatui_block_title_fn!(ratatui_chart_set_block_title, FfiChart);
+crate::ratatui_block_title_spans_fn!(ratatui_chart_set_block_title_spans, FfiChart);
 
 crate::ratatui_block_adv_fn!(ratatui_chart_set_block_adv, FfiChart);
 
@@ -5538,61 +5136,10 @@ pub extern "C" fn ratatui_sparkline_set_max(s: *mut FfiSparkline, max: u64) {
     }
 }
 
-#[no_mangle]
-pub extern "C" fn ratatui_sparkline_set_style(s: *mut FfiSparkline, style: FfiStyle) {
-    if s.is_null() {
-        return;
-    }
-    unsafe {
-        (&mut *s).style = Some(style_from_ffi(style));
-    }
-}
+crate::ratatui_set_style_fn!(ratatui_sparkline_set_style, FfiSparkline, style);
 
-#[no_mangle]
-pub extern "C" fn ratatui_sparkline_set_block_title(
-    s: *mut FfiSparkline,
-    title_utf8: *const c_char,
-    show_border: bool,
-) {
-    if s.is_null() {
-        return;
-    }
-    let sp = unsafe { &mut *s };
-    let mut block = if show_border {
-        Block::default().borders(Borders::ALL)
-    } else {
-        Block::default()
-    };
-    if !title_utf8.is_null() {
-        if let Ok(title) = unsafe { CStr::from_ptr(title_utf8) }.to_str() {
-            block = block.title(title.to_string());
-        }
-    }
-    sp.block = Some(block);
-}
-
-// Span-based block title for Sparkline
-#[no_mangle]
-pub extern "C" fn ratatui_sparkline_set_block_title_spans(
-    s: *mut FfiSparkline,
-    title_spans: *const FfiSpan,
-    title_len: usize,
-    show_border: bool,
-) {
-    if s.is_null() {
-        return;
-    }
-    let sp = unsafe { &mut *s };
-    let mut block = if show_border {
-        Block::default().borders(Borders::ALL)
-    } else {
-        Block::default()
-    };
-    if let Some(spa) = spans_from_ffi(title_spans, title_len) {
-        block = block.title(Line::from(spa));
-    }
-    sp.block = Some(block);
-}
+crate::ratatui_block_title_fn!(ratatui_sparkline_set_block_title, FfiSparkline);
+crate::ratatui_block_title_spans_fn!(ratatui_sparkline_set_block_title_spans, FfiSparkline);
 
 crate::ratatui_block_adv_fn!(ratatui_sparkline_set_block_adv, FfiSparkline);
 
@@ -5723,53 +5270,13 @@ pub extern "C" fn ratatui_scrollbar_configure(
     sb.viewport_len = viewport_len;
 }
 
-#[no_mangle]
 #[cfg(feature = "scrollbar")]
 #[cfg_attr(docsrs, doc(cfg(feature = "scrollbar")))]
-pub extern "C" fn ratatui_scrollbar_set_block_title(
-    s: *mut FfiScrollbar,
-    title_utf8: *const c_char,
-    show_border: bool,
-) {
-    if s.is_null() {
-        return;
-    }
-    let sb = unsafe { &mut *s };
-    let mut block = if show_border {
-        Block::default().borders(Borders::ALL)
-    } else {
-        Block::default()
-    };
-    if !title_utf8.is_null() {
-        if let Ok(title) = unsafe { CStr::from_ptr(title_utf8) }.to_str() {
-            block = block.title(title.to_string());
-        }
-    }
-    sb.block = Some(block);
-}
+crate::ratatui_block_title_fn!(ratatui_scrollbar_set_block_title, FfiScrollbar);
 
-// Span-based block title for Scrollbar
-#[no_mangle]
-pub extern "C" fn ratatui_scrollbar_set_block_title_spans(
-    s: *mut FfiScrollbar,
-    title_spans: *const FfiSpan,
-    title_len: usize,
-    show_border: bool,
-) {
-    if s.is_null() {
-        return;
-    }
-    let sb = unsafe { &mut *s };
-    let mut block = if show_border {
-        Block::default().borders(Borders::ALL)
-    } else {
-        Block::default()
-    };
-    if let Some(sp) = spans_from_ffi(title_spans, title_len) {
-        block = block.title(Line::from(sp));
-    }
-    sb.block = Some(block);
-}
+#[cfg(feature = "scrollbar")]
+#[cfg_attr(docsrs, doc(cfg(feature = "scrollbar")))]
+crate::ratatui_block_title_spans_fn!(ratatui_scrollbar_set_block_title_spans, FfiScrollbar);
 
 #[no_mangle]
 #[cfg(feature = "scrollbar")]
@@ -5964,19 +5471,7 @@ pub extern "C" fn ratatui_table_state_free(st: *mut FfiTableState) {
     }
 }
 
-#[no_mangle]
-pub extern "C" fn ratatui_table_state_set_selected(st: *mut FfiTableState, selected: i32) {
-    if st.is_null() {
-        return;
-    }
-    unsafe {
-        (&mut *st).selected = if selected < 0 {
-            None
-        } else {
-            Some(selected as usize)
-        };
-    }
-}
+crate::ratatui_set_selected_i32_fn!(ratatui_table_state_set_selected, FfiTableState, selected);
 
 #[no_mangle]
 pub extern "C" fn ratatui_table_state_set_offset(st: *mut FfiTableState, offset: usize) {
@@ -6212,74 +5707,12 @@ pub extern "C" fn ratatui_table_append_row_cells_lines(
     t.rows_cells_lines.as_mut().unwrap().push(row);
 }
 
-#[no_mangle]
-pub extern "C" fn ratatui_table_set_block_title(
-    tbl: *mut FfiTable,
-    title_utf8: *const c_char,
-    show_border: bool,
-) {
-    if tbl.is_null() {
-        return;
-    }
-    let t = unsafe { &mut *tbl };
-    let mut block = if show_border {
-        Block::default().borders(Borders::ALL)
-    } else {
-        Block::default()
-    };
-    if !title_utf8.is_null() {
-        let c_str = unsafe { CStr::from_ptr(title_utf8) };
-        if let Ok(title) = c_str.to_str() {
-            block = block.title(title.to_string());
-        }
-    }
-    t.block = Some(block);
-}
+crate::ratatui_block_title_fn!(ratatui_table_set_block_title, FfiTable);
+crate::ratatui_block_title_spans_fn!(ratatui_table_set_block_title_spans, FfiTable);
 
-// Span-based block title for Table
-#[no_mangle]
-pub extern "C" fn ratatui_table_set_block_title_spans(
-    tbl: *mut FfiTable,
-    title_spans: *const FfiSpan,
-    title_len: usize,
-    show_border: bool,
-) {
-    if tbl.is_null() {
-        return;
-    }
-    let t = unsafe { &mut *tbl };
-    let mut block = if show_border {
-        Block::default().borders(Borders::ALL)
-    } else {
-        Block::default()
-    };
-    if let Some(sp) = spans_from_ffi(title_spans, title_len) {
-        block = block.title(Line::from(sp));
-    }
-    t.block = Some(block);
-}
+crate::ratatui_set_selected_i32_fn!(ratatui_table_set_selected, FfiTable, selected);
 
-#[no_mangle]
-pub extern "C" fn ratatui_table_set_selected(tbl: *mut FfiTable, selected: i32) {
-    if tbl.is_null() {
-        return;
-    }
-    let t = unsafe { &mut *tbl };
-    t.selected = if selected < 0 {
-        None
-    } else {
-        Some(selected as usize)
-    };
-}
-
-#[no_mangle]
-pub extern "C" fn ratatui_table_set_row_highlight_style(tbl: *mut FfiTable, style: FfiStyle) {
-    if tbl.is_null() {
-        return;
-    }
-    let t = unsafe { &mut *tbl };
-    t.row_highlight_style = Some(style_from_ffi(style));
-}
+crate::ratatui_set_style_fn!(ratatui_table_set_row_highlight_style, FfiTable, row_highlight_style);
 
 #[no_mangle]
 pub extern "C" fn ratatui_table_set_highlight_symbol(tbl: *mut FfiTable, sym_utf8: *const c_char) {
@@ -6335,14 +5768,7 @@ pub extern "C" fn ratatui_table_set_highlight_spacing(tbl: *mut FfiTable, spacin
     });
 }
 
-#[no_mangle]
-pub extern "C" fn ratatui_table_set_header_style(tbl: *mut FfiTable, style: FfiStyle) {
-    if tbl.is_null() {
-        return;
-    }
-    let t = unsafe { &mut *tbl };
-    t.header_style = Some(style_from_ffi(style));
-}
+crate::ratatui_set_style_fn!(ratatui_table_set_header_style, FfiTable, header_style);
 
 #[no_mangle]
 pub extern "C" fn ratatui_table_set_row_height(tbl: *mut FfiTable, height: u16) {
@@ -7117,15 +6543,7 @@ pub extern "C" fn ratatui_table_append_rows_cells_lines(
 }
 
 // Reserve helpers to minimize reallocations on bulk appends
-#[no_mangle]
-pub extern "C" fn ratatui_list_reserve_items(lst: *mut FfiList, additional: usize) {
-    if lst.is_null() {
-        return;
-    }
-    unsafe {
-        (&mut *lst).items.reserve(additional);
-    }
-}
+crate::ratatui_reserve_vec_fn!(ratatui_list_reserve_items, FfiList, items);
 
 #[no_mangle]
 pub extern "C" fn ratatui_table_reserve_rows(tbl: *mut FfiTable, additional: usize) {
@@ -7142,22 +6560,6 @@ pub extern "C" fn ratatui_table_reserve_rows(tbl: *mut FfiTable, additional: usi
     }
 }
 
-#[no_mangle]
-pub extern "C" fn ratatui_paragraph_reserve_lines(para: *mut FfiParagraph, additional: usize) {
-    if para.is_null() {
-        return;
-    }
-    unsafe {
-        (&mut *para).lines.reserve(additional);
-    }
-}
+crate::ratatui_reserve_vec_fn!(ratatui_paragraph_reserve_lines, FfiParagraph, lines);
 
-#[no_mangle]
-pub extern "C" fn ratatui_chart_reserve_datasets(c: *mut FfiChart, additional: usize) {
-    if c.is_null() {
-        return;
-    }
-    unsafe {
-        (&mut *c).datasets.reserve(additional);
-    }
-}
+crate::ratatui_reserve_vec_fn!(ratatui_chart_reserve_datasets, FfiChart, datasets);
