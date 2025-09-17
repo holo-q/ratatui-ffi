@@ -3,6 +3,34 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use anstyle::{AnsiColor, Style};
+use indicatif::{ProgressBar, ProgressStyle};
+
+fn style_header() -> Style {
+    Style::new()
+        .bold()
+        .fg_color(Some(AnsiColor::Cyan.into()))
+}
+fn style_ok() -> Style {
+    Style::new().fg_color(Some(AnsiColor::Green.into())).bold()
+}
+fn style_warn() -> Style {
+    Style::new().fg_color(Some(AnsiColor::Yellow.into()))
+}
+fn style_err() -> Style {
+    Style::new().fg_color(Some(AnsiColor::Red.into())).bold()
+}
+fn style_path() -> Style { Style::new().fg_color(Some(AnsiColor::BrightBlack.into())) }
+fn style_name() -> Style { Style::new().bold().fg_color(Some(AnsiColor::BrightWhite.into())) }
+fn style_group() -> Style { Style::new().fg_color(Some(AnsiColor::Blue.into())) }
+fn style_module() -> Style { Style::new().fg_color(Some(AnsiColor::Magenta.into())) }
+fn style_type() -> Style { Style::new().fg_color(Some(AnsiColor::Yellow.into())) }
+fn style_map() -> Style { Style::new().fg_color(Some(AnsiColor::Green.into())) }
+fn render(s: &Style, text: &str) -> String {
+    format!("{s}{text}{}", Style::new().render_reset())
+}
 
 fn read_file(path: &Path) -> String {
     fs::read_to_string(path).unwrap_or_default()
@@ -21,8 +49,13 @@ fn extract_source_exports(src: &str) -> Vec<String> {
                     let s2 = next.trim();
                     if let Some(idx2) = s2.find("extern \"C\" fn ") {
                         let rest = &s2[idx2 + "extern \"C\" fn ".len()..];
-                        let name: String = rest.chars().take_while(|&c| c == '_' || c.is_ascii_alphanumeric()).collect();
-                        if !name.is_empty() { out.push(name); }
+                        let name: String = rest
+                            .chars()
+                            .take_while(|&c| c == '_' || c.is_ascii_alphanumeric())
+                            .collect();
+                        if !name.is_empty() {
+                            out.push(name);
+                        }
                         break;
                     }
                 }
@@ -32,6 +65,569 @@ fn extract_source_exports(src: &str) -> Vec<String> {
     }
     out.sort();
     out.dedup();
+    out
+}
+
+fn strip_comments(s: &str) -> String {
+    // Remove // line comments and /* */ block comments (naive but adequate for enums)
+    let mut out = String::with_capacity(s.len());
+    let bytes = s.as_bytes();
+    let mut i = 0usize;
+    let mut block_depth = 0usize;
+    let mut in_line = false;
+    while i < bytes.len() {
+        let c = bytes[i] as char;
+        let next = if i + 1 < bytes.len() { Some(bytes[i + 1] as char) } else { None };
+        if block_depth > 0 {
+            if c == '*' && next == Some('/') {
+                block_depth -= 1;
+                i += 2;
+                continue;
+            }
+            i += 1;
+            continue;
+        }
+        if in_line {
+            if c == '\n' { in_line = false; out.push(c); }
+            i += 1;
+            continue;
+        }
+        if c == '/' && next == Some('/') {
+            in_line = true;
+            i += 2;
+            continue;
+        }
+        if c == '/' && next == Some('*') {
+            block_depth += 1;
+            i += 2;
+            continue;
+        }
+        out.push(c);
+        i += 1;
+    }
+    out
+}
+
+fn extract_enum_variants_from_source(src: &str, enum_name: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let needle = format!("pub enum {}", enum_name);
+    if let Some(idx) = src.find(&needle) {
+        let rest = &src[idx + needle.len()..];
+        if let Some(start) = rest.find('{') {
+            let mut depth = 1;
+            let mut body = String::new();
+            for ch in rest[start + 1..].chars() {
+                match ch {
+                    '{' => {
+                        depth += 1;
+                        body.push(ch);
+                    }
+                    '}' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            break;
+                        }
+                        body.push(ch);
+                    }
+                    _ => body.push(ch),
+                }
+            }
+            let body = strip_comments(&body);
+            for part in body.split(',') {
+                let part = part.trim();
+                if part.is_empty() || part.starts_with('#') {
+                    continue;
+                }
+                let mut iter = part.split(|c: char| c == ' ' || c == '=' || c == '(');
+                if let Some(name) = iter.next() {
+                    if !name.is_empty() {
+                        out.push(name.to_string());
+                    }
+                }
+            }
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
+fn collect_public_enums_with_variants(repo_src: &Path) -> BTreeMap<String, Vec<String>> {
+    let mut out: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut stack = vec![repo_src.to_path_buf()];
+    while let Some(path) = stack.pop() {
+        if path.is_dir() {
+            if let Ok(read) = fs::read_dir(&path) {
+                for entry in read.flatten() {
+                    stack.push(entry.path());
+                }
+            }
+            continue;
+        }
+        if path.extension().and_then(|e| e.to_str()) != Some("rs") {
+            continue;
+        }
+        if let Ok(text) = fs::read_to_string(&path) {
+            let mut off = 0usize;
+            let bytes = text.as_bytes();
+            while let Some(rel) = text[off..].find("pub enum ") {
+                let start = off + rel + "pub enum ".len();
+                // skip whitespace
+                let mut i = start;
+                while i < bytes.len() && bytes[i].is_ascii_whitespace() { i += 1; }
+                // capture name
+                let mut j = i;
+                while j < bytes.len() {
+                    let ch = bytes[j] as char;
+                    if ch.is_alphanumeric() || ch == '_' { j += 1; } else { break; }
+                }
+                if j > i {
+                    if let Ok(name) = std::str::from_utf8(&bytes[i..j]) {
+                        let variants = extract_enum_variants_from_source(&text, name);
+                        if !variants.is_empty() {
+                            out.entry(name.to_string()).or_default().extend(variants);
+                        }
+                    }
+                }
+                off = start;
+            }
+        }
+    }
+    for v in out.values_mut() { v.sort(); v.dedup(); }
+    out
+}
+
+fn collect_ffi_enums_with_variants(ffi_src: &str) -> BTreeMap<String, Vec<String>> {
+    let mut out: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut off = 0usize;
+    let bytes = ffi_src.as_bytes();
+    while let Some(rel) = ffi_src[off..].find("pub enum Ffi") {
+        let start = off + rel + "pub enum ".len();
+        let mut i = start;
+        while i < bytes.len() && bytes[i].is_ascii_whitespace() { i += 1; }
+        let mut j = i;
+        while j < bytes.len() {
+            let ch = bytes[j] as char;
+            if ch.is_alphanumeric() || ch == '_' { j += 1; } else { break; }
+        }
+        if j > i {
+            if let Ok(name) = std::str::from_utf8(&bytes[i..j]) {
+                let variants = extract_enum_variants_from_source(ffi_src, name);
+                out.insert(name.to_string(), variants);
+            }
+        }
+        off = start;
+    }
+    out
+}
+
+fn ratatui_version_from_lock(lock_path: &Path) -> Option<String> {
+    let data = fs::read_to_string(lock_path).ok()?;
+    let mut in_package = false;
+    let mut saw_name = false;
+    for line in data.lines() {
+        let line = line.trim();
+        if line == "[[package]]" {
+            in_package = true;
+            saw_name = false;
+            continue;
+        }
+        if !in_package {
+            continue;
+        }
+        if line.is_empty() || line.starts_with('[') {
+            in_package = false;
+            continue;
+        }
+        if line.starts_with("name = \"ratatui\"") {
+            saw_name = true;
+            continue;
+        }
+        if saw_name && line.starts_with("version = ") {
+            let v = line.trim_start_matches("version = ").trim();
+            return Some(v.trim_matches('"').to_string());
+        }
+    }
+    None
+}
+
+fn unique_temp_dir(prefix: &str) -> PathBuf {
+    let base = env::temp_dir();
+    let ts = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    base.join(format!("{}-{}-{}", prefix, std::process::id(), ts))
+}
+
+fn clone_ratatui(tag: &str) -> Option<PathBuf> {
+    let dest = unique_temp_dir("ratatui-src");
+    if fs::create_dir(&dest).is_err() {
+        return None;
+    }
+    let status = Command::new("git")
+        .arg("clone")
+        .arg("--depth")
+        .arg("1")
+        .arg("--branch")
+        .arg(tag)
+        .arg("https://github.com/ratatui-org/ratatui.git")
+        .arg(&dest)
+        .status()
+        .ok()?;
+    if status.success() {
+        Some(dest)
+    } else {
+        let _ = fs::remove_dir_all(&dest);
+        None
+    }
+}
+
+struct RatatuiRepo {
+    path: PathBuf,
+    cleanup: bool,
+}
+
+fn clone_ratatui_into(tag: &str, dest: &Path) -> bool {
+    if let Some(parent) = dest.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let status = Command::new("git")
+        .arg("clone")
+        .arg("--depth")
+        .arg("1")
+        .arg("--branch")
+        .arg(tag)
+        .arg("https://github.com/ratatui-org/ratatui.git")
+        .arg(dest)
+        .status();
+    match status {
+        Ok(s) if s.success() => true,
+        _ => {
+            let _ = fs::remove_dir_all(dest);
+            false
+        }
+    }
+}
+
+fn ensure_ratatui_repo(root: &Path) -> Option<RatatuiRepo> {
+    if let Ok(override_path) = env::var("RATATUI_SRC_PATH") {
+        let pb = PathBuf::from(override_path);
+        if pb.exists() {
+            return Some(RatatuiRepo {
+                path: pb,
+                cleanup: false,
+            });
+        }
+    }
+
+    let lock_path = root.join("Cargo.lock");
+    let version = ratatui_version_from_lock(&lock_path)?;
+    let tag = format!("v{}", version);
+    let cache_base = root.join("target/ratatui-src");
+    let cache_path = cache_base.join(&tag);
+    if cache_path.join(".git").exists() {
+        return Some(RatatuiRepo {
+            path: cache_path,
+            cleanup: false,
+        });
+    }
+    if cache_path.exists() {
+        let _ = fs::remove_dir_all(&cache_path);
+    }
+    if clone_ratatui_into(&tag, &cache_path) {
+        return Some(RatatuiRepo {
+            path: cache_path,
+            cleanup: false,
+        });
+    }
+
+    clone_ratatui(&tag).map(|p| RatatuiRepo {
+        path: p,
+        cleanup: true,
+    })
+}
+
+fn find_ratatui_item_source(repo: &Path, kind: &str, name: &str) -> Option<(PathBuf, String)> {
+    let needle = format!("pub {} {}", kind, name);
+    let mut stack = vec![repo.to_path_buf()];
+    while let Some(path) = stack.pop() {
+        if path.is_dir() {
+            if let Ok(entries) = fs::read_dir(&path) {
+                for entry in entries.flatten() {
+                    stack.push(entry.path());
+                }
+            }
+            continue;
+        }
+        if path.extension().and_then(|e| e.to_str()) != Some("rs") {
+            continue;
+        }
+        if let Ok(text) = fs::read_to_string(&path) {
+            if text.contains(&needle) {
+                return Some((path, text));
+            }
+        }
+    }
+    None
+}
+
+fn collect_pub_items(repo: &Path, subdir: &str, kind: &str) -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    let base = repo.join(subdir);
+    let pattern = format!("pub {} ", kind);
+    let mut stack = vec![base];
+    while let Some(path) = stack.pop() {
+        if path.is_dir() {
+            if let Ok(read) = fs::read_dir(&path) {
+                for entry in read.flatten() {
+                    stack.push(entry.path());
+                }
+            }
+            continue;
+        }
+        if path.extension().and_then(|e| e.to_str()) != Some("rs") {
+            continue;
+        }
+        if let Ok(text) = fs::read_to_string(&path) {
+            let mut offset = 0;
+            let bytes = text.as_bytes();
+            while let Some(rel) = text[offset..].find(&pattern) {
+                let start = offset + rel + pattern.len();
+                let mut idx = start;
+                while idx < bytes.len() && bytes[idx].is_ascii_whitespace() {
+                    idx += 1;
+                }
+                let mut end = idx;
+                while end < bytes.len() {
+                    let ch = bytes[end] as char;
+                    if ch.is_alphanumeric() || ch == '_' {
+                        end += 1;
+                    } else {
+                        break;
+                    }
+                }
+                if end > idx {
+                    if let Ok(name) = std::str::from_utf8(&bytes[idx..end]) {
+                        out.insert(name.to_string());
+                    }
+                }
+                offset = start;
+            }
+        }
+    }
+    out
+}
+
+fn ratatui_widget_structs(repo: &Path) -> BTreeSet<String> {
+    collect_pub_items(repo, "src/widgets", "struct")
+}
+
+fn ratatui_widget_enums(repo: &Path) -> BTreeSet<String> {
+    collect_pub_items(repo, "src/widgets", "enum")
+}
+
+fn collect_pub_items_detailed(repo: &Path, subdir: &str, kind: &str) -> Vec<(String, PathBuf)> {
+    let mut out: Vec<(String, PathBuf)> = Vec::new();
+    let base = repo.join(subdir);
+    let pattern = format!("pub {} ", kind);
+    let mut stack = vec![base.clone()];
+    while let Some(path) = stack.pop() {
+        if path.is_dir() {
+            if let Ok(read) = fs::read_dir(&path) {
+                for entry in read.flatten() { stack.push(entry.path()); }
+            }
+            continue;
+        }
+        if path.extension().and_then(|e| e.to_str()) != Some("rs") { continue; }
+        if let Ok(text) = fs::read_to_string(&path) {
+            let mut offset = 0usize;
+            let bytes = text.as_bytes();
+            while let Some(rel) = text[offset..].find(&pattern) {
+                let start = offset + rel + pattern.len();
+                let mut i = start;
+                while i < bytes.len() && bytes[i].is_ascii_whitespace() { i += 1; }
+                let mut j = i;
+                while j < bytes.len() {
+                    let ch = bytes[j] as char;
+                    if ch.is_alphanumeric() || ch == '_' { j += 1; } else { break; }
+                }
+                if j > i {
+                    if let Ok(name) = std::str::from_utf8(&bytes[i..j]) {
+                        out.push((name.to_string(), path.clone()));
+                    }
+                }
+                offset = start;
+            }
+        }
+    }
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    out
+}
+
+fn collect_public_enums_with_variants_detailed(src_dir: &Path) -> Vec<(String, Vec<String>, PathBuf)> {
+    let mut out: Vec<(String, Vec<String>, PathBuf)> = Vec::new();
+    let mut stack = vec![src_dir.to_path_buf()];
+    while let Some(path) = stack.pop() {
+        if path.is_dir() {
+            if let Ok(read) = fs::read_dir(&path) {
+                for entry in read.flatten() { stack.push(entry.path()); }
+            }
+            continue;
+        }
+        if path.extension().and_then(|e| e.to_str()) != Some("rs") { continue; }
+        if let Ok(text) = fs::read_to_string(&path) {
+            let mut off = 0usize;
+            while let Some(rel) = text[off..].find("pub enum ") {
+                let start = off + rel + "pub enum ".len();
+                let mut i = start;
+                while i < text.len() && text.as_bytes()[i].is_ascii_whitespace() { i += 1; }
+                let mut j = i;
+                while j < text.len() {
+                    let ch = text.as_bytes()[j] as char;
+                    if ch.is_alphanumeric() || ch == '_' { j += 1; } else { break; }
+                }
+                if j > i {
+                    let name = text[i..j].to_string();
+                    let variants = extract_enum_variants_from_source(&text, &name);
+                    out.push((name, variants, path.clone()));
+                }
+                off = start;
+            }
+        }
+    }
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    out
+}
+
+fn scope_from(base_src: &Path, file: &Path) -> String {
+    let rel = file.strip_prefix(base_src).unwrap_or(file);
+    let scope = rel.parent().map(|p| p.to_string_lossy().to_string()).unwrap_or_default();
+    if scope.is_empty() { "src".to_string() } else { scope }
+}
+
+fn ratatui_public_structs(repo: &Path) -> BTreeSet<String> {
+    collect_pub_items(repo, "src", "struct")
+}
+
+fn ratatui_public_traits(repo: &Path) -> BTreeSet<String> {
+    collect_pub_items(repo, "src", "trait")
+}
+
+fn ratatui_public_functions(repo: &Path) -> BTreeSet<String> {
+    collect_pub_items(repo, "src", "fn")
+}
+
+fn ratatui_public_types(repo: &Path) -> BTreeSet<String> {
+    collect_pub_items(repo, "src", "type")
+}
+
+#[derive(Debug, Clone)]
+struct PubConst {
+    name: String,
+    type_sig: Option<String>,
+    value_snippet: Option<String>,
+    file: PathBuf,
+    module_key: String,
+}
+
+fn collect_public_consts_detailed(repo: &Path) -> Vec<PubConst> {
+    let mut out: Vec<PubConst> = Vec::new();
+    let base = repo.join("src");
+    let mut stack = vec![base.clone()];
+    while let Some(path) = stack.pop() {
+        if path.is_dir() {
+            if let Ok(read) = fs::read_dir(&path) {
+                for entry in read.flatten() {
+                    stack.push(entry.path());
+                }
+            }
+            continue;
+        }
+        if path.extension().and_then(|e| e.to_str()) != Some("rs") {
+            continue;
+        }
+        let Ok(text) = fs::read_to_string(&path) else { continue; };
+        let bytes = text.as_bytes();
+        let mut off = 0usize;
+        while let Some(rel) = text[off..].find("pub const ") {
+            let start = off + rel + "pub const ".len();
+            let mut i = start;
+            while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+                i += 1;
+            }
+            // Skip const fn definitions
+            if i + 2 <= bytes.len() {
+                let head = &text[i..bytes.len().min(i + 8)];
+                if head.starts_with("fn") && head[2..].chars().next().map(|c| !c.is_alphanumeric() && c != '_').unwrap_or(true) {
+                    off = start;
+                    continue;
+                }
+            }
+            let mut j = i;
+            while j < bytes.len() {
+                let ch = bytes[j] as char;
+                if ch.is_alphanumeric() || ch == '_' { j += 1; } else { break; }
+            }
+            if j <= i { off = start; continue; }
+            let name = std::str::from_utf8(&bytes[i..j]).unwrap_or("").to_string();
+
+            // Parse declaration until the next semicolon to avoid spanning into code blocks
+            let rest = &text[j..];
+            let semi_idx = match rest.find(';') { Some(v) => v, None => { off = start; continue; } };
+            let decl = &rest[..semi_idx];
+            let decl_nc = strip_comments(decl);
+            // Collect optional type between ':' and '=' or end
+            let mut type_sig: Option<String> = None;
+            if let Some(colon_pos) = decl_nc.find(':') {
+                let after_colon = &decl_nc[colon_pos + 1..];
+                let end_pos = after_colon.find('=').unwrap_or(after_colon.len());
+                let t = after_colon[..end_pos].trim();
+                if !t.is_empty() { type_sig = Some(t.to_string()); }
+            }
+            // Optionally capture a small value snippet after '=' up to semicolon
+            let mut value_snippet: Option<String> = None;
+            if let Some(eq_pos) = decl_nc.find('=') {
+                let v = decl_nc[eq_pos + 1..].trim();
+                if !v.is_empty() {
+                    let snippet = if v.len() > 80 { format!("{} …", &v[..80]) } else { v.to_string() };
+                    value_snippet = Some(snippet);
+                }
+            }
+
+            let rel = path.strip_prefix(&base).unwrap_or(&path);
+            let module_key = rel.parent()
+                .and_then(|p| p.file_stem())
+                .and_then(|s| s.to_str())
+                .unwrap_or_else(|| rel.file_stem().and_then(|s| s.to_str()).unwrap_or(""))
+                .to_string();
+
+            out.push(PubConst { name, type_sig, value_snippet, file: path.clone(), module_key });
+            off = start;
+        }
+    }
+    out.sort_by(|a, b| a.name.cmp(&b.name));
+    out
+}
+
+fn to_snake_case(name: &str) -> String {
+    if name.is_empty() {
+        return String::new();
+    }
+    let mut out = String::with_capacity(name.len() * 2);
+    let mut prev_is_lower = false;
+    for ch in name.chars() {
+        if ch.is_ascii_uppercase() {
+            if prev_is_lower {
+                out.push('_');
+            }
+            out.push(ch.to_ascii_lowercase());
+            prev_is_lower = false;
+        } else {
+            prev_is_lower = ch.is_ascii_lowercase() || ch.is_ascii_digit();
+            out.push(ch);
+        }
+    }
     out
 }
 
@@ -67,7 +663,9 @@ fn nm_cmd() -> Option<String> {
 
 fn extract_binary_exports(lib: &Path) -> Vec<String> {
     let mut out = Vec::new();
-    let Some(nm) = nm_cmd() else { return out; };
+    let Some(nm) = nm_cmd() else {
+        return out;
+    };
     let os = env::consts::OS;
     let lib_str = lib.to_string_lossy().to_string();
     let args: Vec<String> = if os == "macos" {
@@ -127,116 +725,139 @@ fn main() {
     let src = read_file(&src_path);
     let src_exports = extract_source_exports(&src);
     let lib = find_library(&root);
-    let bin_exports = lib.as_ref().map(|p| extract_binary_exports(p)).unwrap_or_default();
+    let bin_exports = lib
+        .as_ref()
+        .map(|p| extract_binary_exports(p))
+        .unwrap_or_default();
+
+    // Prepare Ratatui sources (clone or reuse cache), no stdout noise
+    let rat_repo = ensure_ratatui_repo(&root);
 
     let src_set: BTreeSet<_> = src_exports.iter().cloned().collect();
     let bin_set: BTreeSet<_> = bin_exports.iter().cloned().collect();
-    let src_only: Vec<_> = src_set.difference(&bin_set).cloned().collect();
-    let bin_only: Vec<_> = bin_set.difference(&src_set).cloned().collect();
 
     let mut g_src: BTreeMap<String, usize> = BTreeMap::new();
-    for f in &src_exports { *g_src.entry(group_key(f)).or_default() += 1; }
+    for f in &src_exports {
+        *g_src.entry(group_key(f)).or_default() += 1;
+    }
     let mut g_bin: BTreeMap<String, usize> = BTreeMap::new();
-    for f in &bin_exports { *g_bin.entry(group_key(f)).or_default() += 1; }
+    for f in &bin_exports {
+        *g_bin.entry(group_key(f)).or_default() += 1;
+    }
 
     if json {
-        // Emit machine readable JSON without external deps (build a string to avoid format braces escaping)
-        let mut s = String::new();
-        s.push_str("{\"library\":");
-        match &lib {
-            Some(p) => { s.push('\"'); s.push_str(&json_escape(&p.to_string_lossy())); s.push('\"'); }
-            None => s.push_str("null"),
-        }
-        s.push_str(",\"exports_source\":[");
-        for (i, f) in src_exports.iter().enumerate() { if i>0 { s.push(','); } s.push('\"'); s.push_str(&json_escape(f)); s.push('\"'); }
-        s.push_str("],\"exports_binary\":[");
-        for (i, f) in bin_exports.iter().enumerate() { if i>0 { s.push(','); } s.push('\"'); s.push_str(&json_escape(f)); s.push('\"'); }
-        s.push_str("],\"mismatch\":{\"source_only\":[");
-        for (i, f) in src_only.iter().enumerate() { if i>0 { s.push(','); } s.push('\"'); s.push_str(&json_escape(f)); s.push('\"'); }
-        s.push_str("],\"binary_only\":[");
-        for (i, f) in bin_only.iter().enumerate() { if i>0 { s.push(','); } s.push('\"'); s.push_str(&json_escape(f)); s.push('\"'); }
-        s.push_str("]},\"groups\":{\"source\":{");
-        let mut first = true;
-        for (k, v) in &g_src { if !first { s.push(','); } first=false; s.push('\"'); s.push_str(&json_escape(k)); s.push_str("\":"); s.push_str(&v.to_string()); }
-        s.push_str("},\"binary\":{");
-        let mut firstb = true;
-        for (k, v) in &g_bin { if !firstb { s.push(','); } firstb=false; s.push('\"'); s.push_str(&json_escape(k)); s.push_str("\":"); s.push_str(&v.to_string()); }
-        s.push_str("}}}");
-        println!("{}", s);
+        // No separate modes; keep output human-friendly, single run prints everything
+        // but JSON request gets a short notice for now.
+        println!("JSON output not implemented; use plain output.");
         return;
     }
 
-    println!("== ratatui_ffi exports ==");
-    println!("Functions (source): {}", src_exports.len());
-    if let Some(p) = &lib { println!("Library: {}", p.to_string_lossy()); }
-    if !bin_exports.is_empty() { println!("Functions (binary): {}", bin_exports.len()); }
-    if !src_only.is_empty() {
-        println!("\nSource-only (not in binary):");
-        for f in &src_only { println!("  {}", f); }
+    // Pretty, concise, grouped by type then scope
+    println!("{}", render(&style_header(), "== Ratatui FFI Coverage =="));
+    if let Some(repo) = rat_repo.as_ref() {
+        println!(
+            "Repo: {}",
+            render(&style_path(), &repo.path.display().to_string())
+        );
     }
-    if !bin_only.is_empty() {
-        println!("\nBinary-only (not in source):");
-        for f in &bin_only { println!("  {}", f); }
-    }
-    println!("\nGroups (by prefix)");
-    println!("  Source:");
-    for (k, v) in &g_src { println!("    {:<14} {}", k, v); }
-    if !g_bin.is_empty() {
-        println!("  Binary:");
-        for (k, v) in &g_bin { println!("    {:<14} {}", k, v); }
+    println!(
+        "FFI functions: {} (binary: {})",
+        render(&style_name(), &src_exports.len().to_string()),
+        render(&style_name(), &bin_exports.len().to_string())
+    );
+
+    // FFI functions (green if present in binary, red otherwise)
+    println!("\n{}", render(&style_header(), "FFI Functions"));
+    // Group by function group prefix
+    let mut by_group: BTreeMap<String, Vec<&String>> = BTreeMap::new();
+    for f in &src_exports { by_group.entry(group_key(f)).or_default().push(f); }
+    for (grp, mut items) in by_group {
+        items.sort();
+        println!("  [{}]", render(&style_group(), &grp));
+        for f in items {
+            let ok = bin_set.contains(f);
+            let mark = if ok { render(&style_ok(), "✔") } else { render(&style_err(), "✘") };
+            println!("    {} {}", mark, render(&style_name(), f));
+        }
     }
 
-    // Module groups summary (heuristic, zero hardcoding of symbol lists):
-    // This gives a quick sense of non-widget areas exposed via FFI groups.
-    let mut interesting = vec![
-        "terminal", "layout", "headless", "paragraph", "list", "table", "tabs", "gauge", "barchart", "sparkline", "chart", "scrollbar", "canvas", "color",
-    ];
-    println!("\nModule Groups Present (FFI):");
-    interesting.sort();
-    for k in interesting {
-        let has = g_src.contains_key(k);
-        println!("  {:<12} {}", k, if has { "✓" } else { "✗" });
-    }
-
-    // Optional: compare against ratatui docs to spot missing widget families
-    let doc_widgets = root.join("target/doc/ratatui/widgets/sidebar-items.js");
-    if doc_widgets.exists() {
-        println!("\nRatatuí widgets coverage (from docs):");
-        if let Ok(s) = fs::read_to_string(&doc_widgets) {
-            // extract struct names and keep only those that implement Widget/StatefulWidget
-            let mut structs: Vec<String> = Vec::new();
-            if let Some(i) = s.find("\"struct\":") {
-                if let Some(start) = s[i..].find('[') {
-                    let start_idx = i + start + 1;
-                    if let Some(end_rel) = s[start_idx..].find(']') {
-                        let list = &s[start_idx..start_idx+end_rel];
-                        for part in list.split(',') {
-                            let part = part.trim();
-                            if part.starts_with('\"') && part.ends_with('\"') {
-                                let name = part.trim_matches('"').to_string();
-                                if !name.is_empty() {
-                                    // check the struct page for trait impls mentioning Widget/StatefulWidget
-                                    let page = root.join(format!("target/doc/ratatui/widgets/struct.{}.html", name));
-                                    if let Ok(html) = fs::read_to_string(&page) {
-                                        let impls_widget = html.contains("impl-Widget-for-") || html.contains("impl-StatefulWidget-for-");
-                                        if impls_widget { structs.push(name); }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            structs.sort();
-            structs.dedup();
-            // For each widget struct, expect FFI group prefix lowercased name
-            for w in structs {
+    if let Some(repo) = rat_repo.as_ref() {
+        // Widgets grouped by scope (directory under src/widgets)
+        println!("\n{}", render(&style_header(), "Widgets"));
+        let widgets = collect_pub_items_detailed(&repo.path, "src/widgets", "struct");
+        let base_src = repo.path.join("src");
+        let mut by_scope: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        for (name, file) in widgets { by_scope.entry(scope_from(&base_src, &file)).or_default().push(name); }
+        for (scope, mut names) in by_scope {
+            names.sort();
+            println!("  [{}]", render(&style_module(), &scope));
+            for w in names {
                 let key = w.to_lowercase();
-                let has = g_src.contains_key(&key);
-                println!("  {:<14} {}", w, if has { "✓" } else { "✗" });
+                let ok = g_src.contains_key(&key);
+                let mark = if ok { render(&style_ok(), "✔") } else { render(&style_err(), "✘") };
+                println!("    {} {}  [{}]", mark, render(&style_name(), &w), render(&style_group(), &key));
             }
         }
-    } else {
-        println!("\n(ratatui docs not found; run `cargo doc -p ratatui` to enable widget coverage check)");
+
+        // Enums
+        println!("\n{}", render(&style_header(), "Enums"));
+        let rat_enums_d = collect_public_enums_with_variants_detailed(&repo.path.join("src"));
+        let ffi_enums = collect_ffi_enums_with_variants(&src);
+        let base_src = repo.path.join("src");
+        let mut by_scope: BTreeMap<String, Vec<(String, Vec<String>)>> = BTreeMap::new();
+        for (name, vars, file) in rat_enums_d { by_scope.entry(scope_from(&base_src, &file)).or_default().push((name, vars)); }
+        for (scope, mut items) in by_scope {
+            items.sort_by(|a, b| a.0.cmp(&b.0));
+            println!("  [{}]", render(&style_module(), &scope));
+            for (rat_name, rat_variants) in items {
+                let ffi_name = format!("Ffi{}", rat_name);
+                if let Some(ffi_variants) = ffi_enums.get(&ffi_name) {
+                    let rset: BTreeSet<_> = rat_variants.iter().cloned().collect();
+                    let fset: BTreeSet<_> = ffi_variants.iter().cloned().collect();
+                    let missing: Vec<_> = rset.difference(&fset).cloned().collect();
+                    let ok = missing.is_empty();
+                    let mark = if ok { render(&style_ok(), "✔") } else { render(&style_err(), "✘") };
+                    if ok {
+                        println!("    {} {}  [mapped {}]", mark, render(&style_name(), &rat_name), render(&style_map(), &ffi_name));
+                    } else {
+                        let miss = missing.iter().map(|v| render(&style_err(), v)).collect::<Vec<_>>().join(", ");
+                        println!("    {} {}  [mapped {}] missing: {}", mark, render(&style_name(), &rat_name), render(&style_map(), &ffi_name), miss);
+                    }
+                } else {
+                    println!("    {} {}  [no FFI enum]", render(&style_err(), "✘"), render(&style_name(), &rat_name));
+                }
+            }
+        }
+
+        // Consts (not covered yet -> red), but show origin and mapping suggestion
+        println!("\n{}", render(&style_header(), "Consts"));
+        let base_src = repo.path.join("src");
+        let mut by_scope: BTreeMap<String, Vec<PubConst>> = BTreeMap::new();
+        for c in collect_public_consts_detailed(&repo.path) { by_scope.entry(scope_from(&base_src, &c.file)).or_default().push(c); }
+        for (scope, mut items) in by_scope {
+            items.sort_by(|a, b| a.name.cmp(&b.name));
+            println!("  [{}]", render(&style_module(), &scope));
+            for c in items {
+                let rel = c.file.strip_prefix(&repo.path).unwrap_or(&c.file);
+                let mut decl = render(&style_name(), &c.name);
+                if let Some(t) = &c.type_sig { decl.push_str(&format!(": {}", render(&style_type(), t))); }
+                let define = format!("RATATUI_{}_{}", c.module_key.to_uppercase(), c.name.to_uppercase());
+                let getter = format!("ratatui_{}_get_{}", to_snake_case(&c.module_key), to_snake_case(&c.name));
+                println!(
+                    "    {} {}  ({}) -> define {}, getter {}()",
+                    render(&style_err(), "✘"),
+                    decl,
+                    render(&style_path(), &rel.display().to_string()),
+                    render(&style_map(), &define),
+                    render(&style_map(), &getter)
+                );
+            }
+        }
+    }
+
+    if let Some(repo) = rat_repo {
+        if repo.cleanup {
+            let _ = fs::remove_dir_all(repo.path);
+        }
     }
 }

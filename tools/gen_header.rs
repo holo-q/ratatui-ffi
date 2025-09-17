@@ -12,15 +12,19 @@ fn main() {
 
     let mut cmd = Command::new("cbindgen");
     cmd.current_dir(&repo_root)
-        .arg("--config").arg(cfg)
-        .arg("--crate").arg("ratatui_ffi")
-        .arg("--output").arg(&out);
+        .arg("--config")
+        .arg(cfg)
+        .arg("--crate")
+        .arg("ratatui_ffi")
+        .arg("--output")
+        .arg(&out);
 
-    let status = cmd.status().expect("failed to spawn cbindgen (is it installed?)");
+    let status = cmd
+        .status()
+        .expect("failed to spawn cbindgen (is it installed?)");
     if !status.success() {
         eprintln!("cbindgen exited with status: {}", status);
         std::process::exit(status.code().unwrap_or(1));
     }
     println!("Wrote {}", out.display());
 }
-
