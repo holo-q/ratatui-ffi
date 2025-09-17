@@ -876,7 +876,7 @@ pub enum FfiAlign {
 }
 
 
-crate::ratatui_block_adv_fn!(ratatui_list_set_block_adv, FfiList);
+// moved to widgets::list
 
 crate::ratatui_block_adv_fn!(ratatui_table_set_block_adv, FfiTable);
 
@@ -1308,7 +1308,7 @@ fn apply_block_title_alignment(b: Block<'static>, align_code: u32) -> Block<'sta
 // ----- Block title alignment setters (additive; do not break existing APIs) -----
 
 crate::ratatui_block_title_alignment_fn!(ratatui_paragraph_set_block_title_alignment, FfiParagraph);
-crate::ratatui_block_title_alignment_fn!(ratatui_list_set_block_title_alignment, FfiList);
+// moved to widgets::list
 crate::ratatui_block_title_alignment_fn!(ratatui_table_set_block_title_alignment, FfiTable);
 crate::ratatui_block_title_alignment_fn!(ratatui_gauge_set_block_title_alignment, FfiGauge);
 crate::ratatui_block_title_alignment_fn!(ratatui_linegauge_set_block_title_alignment, FfiLineGauge);
@@ -2890,329 +2890,37 @@ pub extern "C" fn ratatui_inject_mouse(kind: u32, btn: u32, x: u16, y: u16, mods
 
 // ----- Simple List -----
 
-#[no_mangle]
-pub extern "C" fn ratatui_list_new() -> *mut FfiList {
-    Box::into_raw(Box::new(FfiList {
-        items: Vec::new(),
-        block: None,
-        selected: None,
-        highlight_style: None,
-        highlight_symbol: None,
-        direction: None,
-        scroll_offset: None,
-        highlight_spacing: None,
-    }))
-}
-
-#[no_mangle]
-pub extern "C" fn ratatui_list_free(lst: *mut FfiList) {
-    if lst.is_null() {
-        return;
-    }
-    unsafe {
-        drop(Box::from_raw(lst));
-    }
-}
+// moved to widgets::list
 
 // ListState FFI
-#[no_mangle]
-pub extern "C" fn ratatui_list_state_new() -> *mut FfiListState {
-    Box::into_raw(Box::new(FfiListState {
-        selected: None,
-        offset: 0,
-    }))
-}
+// moved to widgets::list
 
-#[no_mangle]
-pub extern "C" fn ratatui_list_state_free(st: *mut FfiListState) {
-    if st.is_null() {
-        return;
-    }
-    unsafe {
-        drop(Box::from_raw(st));
-    }
-}
+// moved to widgets::list
 
-crate::ratatui_set_selected_i32_fn!(ratatui_list_state_set_selected, FfiListState, selected);
+// moved to widgets::list
 
-#[no_mangle]
-pub extern "C" fn ratatui_list_state_set_offset(st: *mut FfiListState, offset: usize) {
-    if st.is_null() {
-        return;
-    }
-    unsafe {
-        (&mut *st).offset = offset;
-    }
-}
+// moved to widgets::list
 
-#[no_mangle]
-pub extern "C" fn ratatui_terminal_draw_list_state_in(
-    term: *mut FfiTerminal,
-    lst: *const FfiList,
-    rect: FfiRect,
-    st: *const FfiListState,
-) -> bool {
-    guard_bool("ratatui_terminal_draw_list_state_in", || {
-        if term.is_null() || lst.is_null() || st.is_null() {
-            return false;
-        }
-        let t = unsafe { &mut *term };
-        let l = unsafe { &*lst };
-        let s = unsafe { &*st };
-        let area = Rect {
-            x: rect.x,
-            y: rect.y,
-            width: rect.width,
-            height: rect.height,
-        };
-        let items: Vec<ListItem> = l.items.iter().cloned().map(ListItem::new).collect();
-        let mut widget = List::new(items);
-        if let Some(d) = l.direction {
-            widget = widget.direction(d);
-        }
-        if let Some(b) = &l.block {
-            widget = widget.block(b.clone());
-        }
-        if let Some(sty) = &l.highlight_style {
-            widget = widget.highlight_style(sty.clone());
-        }
-        if let Some(sym) = &l.highlight_symbol {
-            widget = widget.highlight_symbol(sym.as_str());
-        }
-        if let Some(sp) = &l.highlight_spacing {
-            widget = widget.highlight_spacing(sp.clone());
-        }
-        let mut state = ratatui::widgets::ListState::default();
-        if let Some(sel) = s.selected {
-            state.select(Some(sel));
-        }
-        state = state.with_offset(s.offset);
-        let res = t.terminal.draw(|frame| {
-            frame.render_stateful_widget(widget.clone(), area, &mut state);
-        });
-        res.is_ok()
-    })
-}
+// moved to widgets::list
 
-#[no_mangle]
-pub extern "C" fn ratatui_headless_render_list_state(
-    width: u16,
-    height: u16,
-    lst: *const FfiList,
-    st: *const FfiListState,
-    out_text_utf8: *mut *mut c_char,
-) -> bool {
-    if lst.is_null() || st.is_null() || out_text_utf8.is_null() {
-        return false;
-    }
-    let l = unsafe { &*lst };
-    let s = unsafe { &*st };
-    let area = Rect {
-        x: 0,
-        y: 0,
-        width,
-        height,
-    };
-    let mut buf = Buffer::empty(area);
-    let items: Vec<ListItem> = l.items.iter().cloned().map(ListItem::new).collect();
-    let mut widget = List::new(items);
-    if let Some(d) = l.direction {
-        widget = widget.direction(d);
-    }
-    if let Some(b) = &l.block {
-        widget = widget.block(b.clone());
-    }
-    if let Some(sty) = &l.highlight_style {
-        widget = widget.highlight_style(sty.clone());
-    }
-    if let Some(sym) = &l.highlight_symbol {
-        widget = widget.highlight_symbol(sym.as_str());
-    }
-    if let Some(sp) = &l.highlight_spacing {
-        widget = widget.highlight_spacing(sp.clone());
-    }
-    let mut state = ratatui::widgets::ListState::default();
-    if let Some(sel) = s.selected {
-        state.select(Some(sel));
-    }
-    state = state.with_offset(s.offset);
-    ratatui::widgets::StatefulWidget::render(widget, area, &mut buf, &mut state);
-    let mut s = String::new();
-    for y in 0..height {
-        for x in 0..width {
-            let cell = &buf[(x, y)];
-            s.push_str(cell.symbol());
-        }
-        if y + 1 < height {
-            s.push('\n');
-        }
-    }
-    match CString::new(s) {
-        Ok(cstr) => {
-            unsafe {
-                *out_text_utf8 = cstr.into_raw();
-            }
-            true
-        }
-        Err(_) => false,
-    }
-}
+// moved to widgets::list
 
-#[no_mangle]
-pub extern "C" fn ratatui_list_append_item(
-    lst: *mut FfiList,
-    text_utf8: *const c_char,
-    style: FfiStyle,
-) {
-    if lst.is_null() || text_utf8.is_null() {
-        return;
-    }
-    let l = unsafe { &mut *lst };
-    let c_str = unsafe { CStr::from_ptr(text_utf8) };
-    if let Ok(s) = c_str.to_str() {
-        let st = style_from_ffi(style);
-        l.items.push(Line::from(Span::styled(s.to_string(), st)));
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn ratatui_list_append_item_spans(
-    lst: *mut FfiList,
-    spans: *const FfiSpan,
-    len: usize,
-) {
-    if lst.is_null() || spans.is_null() {
-        return;
-    }
-    let l = unsafe { &mut *lst };
-    if let Some(sp) = spans_from_ffi(spans, len) {
-        l.items.push(Line::from(sp));
-    }
-}
+// moved to widgets::list
 
 // Batch append list items from Lines (each specified as spans)
-#[no_mangle]
-pub extern "C" fn ratatui_list_append_items_spans(
-    lst: *mut FfiList,
-    items: *const FfiLineSpans,
-    len: usize,
-) {
-    if lst.is_null() || items.is_null() || len == 0 {
-        return;
-    }
-    let l = unsafe { &mut *lst };
-    let slice = unsafe { std::slice::from_raw_parts(items, len) };
-    for it in slice.iter() {
-        if it.spans.is_null() || it.len == 0 {
-            l.items.push(Line::default());
-            continue;
-        }
-        if let Some(sp) = spans_from_ffi(it.spans, it.len) {
-            l.items.push(Line::from(sp));
-        } else {
-            l.items.push(Line::default());
-        }
-    }
-}
+// moved to widgets::list
 
-crate::ratatui_block_title_fn!(ratatui_list_set_block_title, FfiList);
-crate::ratatui_block_title_spans_fn!(ratatui_list_set_block_title_spans, FfiList);
+// moved to widgets::list
 
-crate::ratatui_set_selected_i32_fn!(ratatui_list_set_selected, FfiList, selected);
+// moved to widgets::list
 
-crate::ratatui_set_style_fn!(ratatui_list_set_highlight_style, FfiList, highlight_style);
+// moved to widgets::list
 
-#[no_mangle]
-pub extern "C" fn ratatui_list_set_highlight_symbol(lst: *mut FfiList, sym_utf8: *const c_char) {
-    if lst.is_null() {
-        return;
-    }
-    let l = unsafe { &mut *lst };
-    l.highlight_symbol = if sym_utf8.is_null() {
-        None
-    } else {
-        unsafe { CStr::from_ptr(sym_utf8) }
-            .to_str()
-            .ok()
-            .map(|s| s.to_string())
-    };
-}
+// moved to widgets::list
 
-#[no_mangle]
-pub extern "C" fn ratatui_list_set_direction(lst: *mut FfiList, dir: u32) {
-    if lst.is_null() {
-        return;
-    }
-    let l = unsafe { &mut *lst };
-    l.direction = Some(match dir {
-        1 => RtListDirection::BottomToTop,
-        _ => RtListDirection::TopToBottom,
-    });
-}
+// moved to widgets::list
 
-#[no_mangle]
-pub extern "C" fn ratatui_list_set_scroll_offset(lst: *mut FfiList, offset: usize) {
-    if lst.is_null() {
-        return;
-    }
-    let l = unsafe { &mut *lst };
-    l.scroll_offset = Some(offset);
-}
-
-#[no_mangle]
-pub extern "C" fn ratatui_list_set_highlight_spacing(lst: *mut FfiList, spacing: u32) {
-    if lst.is_null() {
-        return;
-    }
-    let l = unsafe { &mut *lst };
-    l.highlight_spacing = Some(match spacing {
-        1 => RtHighlightSpacing::Never,
-        2 => RtHighlightSpacing::WhenSelected,
-        _ => RtHighlightSpacing::Always,
-    });
-}
-
-#[no_mangle]
-pub extern "C" fn ratatui_terminal_draw_list_in(
-    term: *mut FfiTerminal,
-    lst: *const FfiList,
-    rect: FfiRect,
-) -> bool {
-    guard_bool("ratatui_terminal_draw_list_in", || {
-        if term.is_null() || lst.is_null() {
-            return false;
-        }
-        let t = unsafe { &mut *term };
-        let l = unsafe { &*lst };
-        let area = Rect {
-            x: rect.x,
-            y: rect.y,
-            width: rect.width,
-            height: rect.height,
-        };
-        let items: Vec<ListItem> = l.items.iter().cloned().map(ListItem::new).collect();
-        let mut widget = List::new(items);
-        if let Some(b) = &l.block {
-            widget = widget.block(b.clone());
-        }
-        if let Some(sty) = &l.highlight_style {
-            widget = widget.highlight_style(sty.clone());
-        }
-        if let Some(sym) = &l.highlight_symbol {
-            widget = widget.highlight_symbol(sym.as_str());
-        }
-        let res = t.terminal.draw(|frame| {
-            if let Some(sel) = l.selected {
-                let mut state = ratatui::widgets::ListState::default();
-                state.select(Some(sel));
-                frame.render_stateful_widget(widget.clone(), area, &mut state);
-            } else {
-                frame.render_widget(widget.clone(), area);
-            }
-        });
-        res.is_ok()
-    })
-}
+// moved to widgets::list
 
 // ----- Gauge -----
 
@@ -5888,7 +5596,7 @@ pub extern "C" fn ratatui_table_append_rows_cells_lines(
 }
 
 // Reserve helpers to minimize reallocations on bulk appends
-crate::ratatui_reserve_vec_fn!(ratatui_list_reserve_items, FfiList, items);
+// moved to widgets::list
 
 #[no_mangle]
 pub extern "C" fn ratatui_table_reserve_rows(tbl: *mut FfiTable, additional: usize) {
