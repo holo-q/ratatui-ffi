@@ -41,3 +41,29 @@ macro_rules! ratatui_block_adv_fn {
         }
     };
 }
+
+// -------- Const getters --------
+
+// Returns a pointer/len pair to a &'static str constant from ratatui.
+#[macro_export]
+macro_rules! ratatui_const_str_getter {
+    ($fn_name:ident, $path:path) => {
+        #[no_mangle]
+        pub extern "C" fn $fn_name() -> crate::FfiStr {
+            let s: &'static str = $path;
+            crate::FfiStr { ptr: s.as_ptr(), len: s.len() }
+        }
+    };
+}
+
+// Returns a Unicode scalar value (u32) for a `char` constant.
+#[macro_export]
+macro_rules! ratatui_const_char_getter {
+    ($fn_name:ident, $path:path) => {
+        #[no_mangle]
+        pub extern "C" fn $fn_name() -> u32 {
+            let ch: char = $path;
+            ch as u32
+        }
+    };
+}

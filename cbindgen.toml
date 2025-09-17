@@ -11,7 +11,12 @@ include = [
   "FfiStyle", "FfiSpan", "FfiLineSpans", "FfiCellInfo", "FfiRect",
   "FfiKeyEvent", "FfiEvent", "FfiColor", "FfiStyleMods", "FfiBorders",
   "FfiBorderType", "FfiAlign", "FfiHighlightSpacing", "FfiKeyCode",
-  "FfiMouseKind", "FfiMouseButton", "FfiFeatures", "FfiScrollbarOrient"
+  "FfiMouseKind", "FfiMouseButton", "FfiFeatures", "FfiScrollbarOrient",
+  "FfiStr", "FfiAlignment", "FfiDirection", "FfiFlex", "FfiGraphType",
+  "FfiLegendPosition", "FfiRenderDirection", "FfiListDirection",
+  "FfiScrollbarOrientation", "FfiScrollDirection", "FfiPosition",
+  "FfiMapResolution", "FfiSize", "FfiConstraint", "FfiSpacing", "FfiMarker",
+  "FfiClearType", "FfiViewport"
 ]
 
 [parse]
@@ -20,4 +25,3 @@ parse_deps = false
 
 [fn]
 no_return = "noreturn"
-

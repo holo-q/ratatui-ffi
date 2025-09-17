@@ -1243,6 +1243,69 @@ pub enum FfiClearType { All = 0, AfterCursor = 1, BeforeCursor = 2, CurrentLine 
 #[repr(u32)]
 pub enum FfiViewport { Fullscreen = 0, Inline = 1, Fixed = 2 }
 
+// ----- Ratatui Symbols: line.rs & border.rs string getters -----
+
+// line.rs basics
+crate::ratatui_const_str_getter!(ratatui_symbols_get_vertical, ratatui::symbols::line::VERTICAL);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_double_vertical, ratatui::symbols::line::DOUBLE_VERTICAL);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_thick_vertical, ratatui::symbols::line::THICK_VERTICAL);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_horizontal, ratatui::symbols::line::HORIZONTAL);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_double_horizontal, ratatui::symbols::line::DOUBLE_HORIZONTAL);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_thick_horizontal, ratatui::symbols::line::THICK_HORIZONTAL);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_top_right, ratatui::symbols::line::TOP_RIGHT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_rounded_top_right, ratatui::symbols::line::ROUNDED_TOP_RIGHT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_double_top_right, ratatui::symbols::line::DOUBLE_TOP_RIGHT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_thick_top_right, ratatui::symbols::line::THICK_TOP_RIGHT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_top_left, ratatui::symbols::line::TOP_LEFT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_rounded_top_left, ratatui::symbols::line::ROUNDED_TOP_LEFT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_double_top_left, ratatui::symbols::line::DOUBLE_TOP_LEFT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_thick_top_left, ratatui::symbols::line::THICK_TOP_LEFT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_bottom_right, ratatui::symbols::line::BOTTOM_RIGHT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_rounded_bottom_right, ratatui::symbols::line::ROUNDED_BOTTOM_RIGHT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_double_bottom_right, ratatui::symbols::line::DOUBLE_BOTTOM_RIGHT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_thick_bottom_right, ratatui::symbols::line::THICK_BOTTOM_RIGHT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_bottom_left, ratatui::symbols::line::BOTTOM_LEFT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_rounded_bottom_left, ratatui::symbols::line::ROUNDED_BOTTOM_LEFT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_double_bottom_left, ratatui::symbols::line::DOUBLE_BOTTOM_LEFT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_thick_bottom_left, ratatui::symbols::line::THICK_BOTTOM_LEFT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_vertical_left, ratatui::symbols::line::VERTICAL_LEFT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_double_vertical_left, ratatui::symbols::line::DOUBLE_VERTICAL_LEFT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_thick_vertical_left, ratatui::symbols::line::THICK_VERTICAL_LEFT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_vertical_right, ratatui::symbols::line::VERTICAL_RIGHT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_double_vertical_right, ratatui::symbols::line::DOUBLE_VERTICAL_RIGHT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_thick_vertical_right, ratatui::symbols::line::THICK_VERTICAL_RIGHT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_horizontal_down, ratatui::symbols::line::HORIZONTAL_DOWN);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_double_horizontal_down, ratatui::symbols::line::DOUBLE_HORIZONTAL_DOWN);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_thick_horizontal_down, ratatui::symbols::line::THICK_HORIZONTAL_DOWN);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_horizontal_up, ratatui::symbols::line::HORIZONTAL_UP);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_double_horizontal_up, ratatui::symbols::line::DOUBLE_HORIZONTAL_UP);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_thick_horizontal_up, ratatui::symbols::line::THICK_HORIZONTAL_UP);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_cross, ratatui::symbols::line::CROSS);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_double_cross, ratatui::symbols::line::DOUBLE_CROSS);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_thick_cross, ratatui::symbols::line::THICK_CROSS);
+
+// border.rs quadrants and one-eighths
+crate::ratatui_const_str_getter!(ratatui_symbols_get_quadrant_top_left, ratatui::symbols::border::QUADRANT_TOP_LEFT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_quadrant_top_right, ratatui::symbols::border::QUADRANT_TOP_RIGHT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_quadrant_bottom_left, ratatui::symbols::border::QUADRANT_BOTTOM_LEFT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_quadrant_bottom_right, ratatui::symbols::border::QUADRANT_BOTTOM_RIGHT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_quadrant_top_half, ratatui::symbols::border::QUADRANT_TOP_HALF);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_quadrant_bottom_half, ratatui::symbols::border::QUADRANT_BOTTOM_HALF);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_quadrant_left_half, ratatui::symbols::border::QUADRANT_LEFT_HALF);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_quadrant_right_half, ratatui::symbols::border::QUADRANT_RIGHT_HALF);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_quadrant_top_left_bottom_left_bottom_right, ratatui::symbols::border::QUADRANT_TOP_LEFT_BOTTOM_LEFT_BOTTOM_RIGHT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_quadrant_top_left_top_right_bottom_left, ratatui::symbols::border::QUADRANT_TOP_LEFT_TOP_RIGHT_BOTTOM_LEFT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_quadrant_top_left_top_right_bottom_right, ratatui::symbols::border::QUADRANT_TOP_LEFT_TOP_RIGHT_BOTTOM_RIGHT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_quadrant_top_right_bottom_left_bottom_right, ratatui::symbols::border::QUADRANT_TOP_RIGHT_BOTTOM_LEFT_BOTTOM_RIGHT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_quadrant_top_left_bottom_right, ratatui::symbols::border::QUADRANT_TOP_LEFT_BOTTOM_RIGHT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_quadrant_top_right_bottom_left, ratatui::symbols::border::QUADRANT_TOP_RIGHT_BOTTOM_LEFT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_quadrant_block, ratatui::symbols::border::QUADRANT_BLOCK);
+
+crate::ratatui_const_str_getter!(ratatui_symbols_get_one_eighth_top_eight, ratatui::symbols::border::ONE_EIGHTH_TOP_EIGHT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_one_eighth_bottom_eight, ratatui::symbols::border::ONE_EIGHTH_BOTTOM_EIGHT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_one_eighth_left_eight, ratatui::symbols::border::ONE_EIGHTH_LEFT_EIGHT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_one_eighth_right_eight, ratatui::symbols::border::ONE_EIGHTH_RIGHT_EIGHT);
+
 bitflags::bitflags! {
     #[repr(transparent)]
     pub struct FfiStyleMods: u16 {
@@ -1271,6 +1334,13 @@ pub struct FfiStyle {
 pub struct FfiSpan {
     pub text_utf8: *const c_char,
     pub style: FfiStyle,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct FfiStr {
+    pub ptr: *const u8,
+    pub len: usize,
 }
 
 // Convenience color helpers for building FfiStyle color values
