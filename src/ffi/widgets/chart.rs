@@ -17,8 +17,7 @@
 
 use crate::{
     ratatui_block_adv_fn, ratatui_block_title_fn, ratatui_block_title_spans_fn,
-    ratatui_block_title_alignment_fn, ratatui_set_style_fn, ratatui_reserve_vec_fn,
-    FfiLineSpans, FfiRect, FfiStyle, FfiTerminal,
+    ratatui_set_style_fn, FfiLineSpans, FfiRect, FfiStyle, FfiTerminal,
 };
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Alignment, Constraint, Rect};
@@ -29,12 +28,62 @@ use ratatui::widgets::{
 };
 use std::ffi::{c_char, CStr, CString};
 
+#[repr(C)]
+pub struct FfiBarChart {
+    pub values: Vec<u64>,
+    pub labels: Vec<String>,
+    pub block: Option<Block<'static>>,
+    pub bar_width: Option<u16>,
+    pub bar_gap: Option<u16>,
+    pub bar_style: Option<Style>,
+    pub value_style: Option<Style>,
+    pub label_style: Option<Style>,
+}
+
+#[repr(C)]
+pub struct FfiChartDataset {
+    pub name: String,
+    pub points: Vec<(f64, f64)>,
+    pub style: Option<Style>,
+    pub kind: u32,
+}
+
+#[repr(C)]
+pub struct FfiChartDatasetSpec {
+    pub name_utf8: *const c_char,
+    pub points_xy: *const f64,
+    pub len_pairs: usize,
+    pub style: FfiStyle,
+    pub kind: u32,
+}
+
+#[repr(C)]
+pub struct FfiChart {
+    pub datasets: Vec<FfiChartDataset>,
+    pub x_title: Option<String>,
+    pub y_title: Option<String>,
+    pub block: Option<Block<'static>>,
+    pub x_min: Option<f64>,
+    pub x_max: Option<f64>,
+    pub y_min: Option<f64>,
+    pub y_max: Option<f64>,
+    pub legend_pos: Option<u32>,
+    pub hidden_legend_kinds: Option<[u32; 2]>,
+    pub hidden_legend_values: Option<[u16; 2]>,
+    pub chart_style: Option<Style>,
+    pub x_axis_style: Option<Style>,
+    pub y_axis_style: Option<Style>,
+    pub x_labels: Option<Vec<Line<'static>>>,
+    pub y_labels: Option<Vec<Line<'static>>>,
+    pub x_labels_align: Option<Alignment>,
+    pub y_labels_align: Option<Alignment>,
+}
+
 // ----- BarChart -----
 
 ratatui_block_title_fn!(ratatui_barchart_set_block_title, FfiBarChart);
 ratatui_block_title_spans_fn!(ratatui_barchart_set_block_title_spans, FfiBarChart);
 ratatui_block_adv_fn!(ratatui_barchart_set_block_adv, FfiBarChart);
-ratatui_block_title_alignment_fn!(ratatui_barchart_set_block_title_alignment, FfiBarChart);
 
 // ----- Chart -----
 
@@ -42,7 +91,6 @@ ratatui_set_style_fn!(ratatui_chart_set_style, FfiChart, chart_style);
 ratatui_block_title_fn!(ratatui_chart_set_block_title, FfiChart);
 ratatui_block_title_spans_fn!(ratatui_chart_set_block_title_spans, FfiChart);
 ratatui_block_adv_fn!(ratatui_chart_set_block_adv, FfiChart);
-ratatui_block_title_alignment_fn!(ratatui_chart_set_block_title_alignment, FfiChart);
 
 #[no_mangle]
 pub extern "C" fn ratatui_barchart_new() -> *mut FfiBarChart {
@@ -562,58 +610,6 @@ pub extern "C" fn ratatui_chart_set_labels_alignment(c: *mut FfiChart, x_align: 
         _ => Alignment::Left,
     });
 }
-
-#[repr(C)]
-pub struct FfiBarChart {
-    pub values: Vec<u64>,
-    pub labels: Vec<String>,
-    pub block: Option<Block<'static>>,
-    pub bar_width: Option<u16>,
-    pub bar_gap: Option<u16>,
-    pub bar_style: Option<Style>,
-    pub value_style: Option<Style>,
-    pub label_style: Option<Style>,
-}
-
-#[repr(C)]
-pub struct FfiChartDataset {
-    pub name: String,
-    pub points: Vec<(f64, f64)>,
-    pub style: Option<Style>,
-    pub kind: u32,
-}
-
-#[repr(C)]
-pub struct FfiChartDatasetSpec {
-    pub name_utf8: *const c_char,
-    pub points_xy: *const f64,
-    pub len_pairs: usize,
-    pub style: FfiStyle,
-    pub kind: u32,
-}
-
-#[repr(C)]
-pub struct FfiChart {
-    pub datasets: Vec<FfiChartDataset>,
-    pub x_title: Option<String>,
-    pub y_title: Option<String>,
-    pub block: Option<Block<'static>>,
-    pub x_min: Option<f64>,
-    pub x_max: Option<f64>,
-    pub y_min: Option<f64>,
-    pub y_max: Option<f64>,
-    pub legend_pos: Option<u32>,
-    pub hidden_legend_kinds: Option<[u32; 2]>,
-    pub hidden_legend_values: Option<[u16; 2]>,
-    pub chart_style: Option<Style>,
-    pub x_axis_style: Option<Style>,
-    pub y_axis_style: Option<Style>,
-    pub x_labels: Option<Vec<Line<'static>>>,
-    pub y_labels: Option<Vec<Line<'static>>>,
-    pub x_labels_align: Option<Alignment>,
-    pub y_labels_align: Option<Alignment>,
-}
-ratatui_reserve_vec_fn!(ratatui_chart_reserve_datasets, FfiChart, datasets);
 
 #[no_mangle]
 pub extern "C" fn ratatui_terminal_draw_chart_in(
