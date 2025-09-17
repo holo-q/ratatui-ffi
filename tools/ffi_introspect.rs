@@ -99,6 +99,30 @@ fn extract_source_exports(src: &str) -> Vec<String> {
             seek2 = start + end;
         } else { break; }
     }
+    // const getter macros
+    for pat in [
+        "ratatui_const_str_getter!(",
+        "ratatui_const_char_getter!(",
+        "ratatui_const_line_set_getter!(",
+        "ratatui_const_border_set_getter!(",
+        "ratatui_const_level_set_getter!(",
+        "ratatui_const_scrollbar_set_getter!(",
+        "ratatui_const_struct_getter!(",
+    ] {
+        let mut s = 0usize;
+        while let Some(idx) = src[s..].find(pat) {
+            let start = s + idx + pat.len();
+            let rest = &src[start..];
+            if let Some(end) = rest.find(',') {
+                let name = rest[..end].trim();
+                if !name.is_empty() {
+                    let nm = name.trim_start_matches("crate::").trim();
+                    out.push(nm.to_string());
+                }
+                s = start + end;
+            } else { break; }
+        }
+    }
     out.sort();
     out.dedup();
     out

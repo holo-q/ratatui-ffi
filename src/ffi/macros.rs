@@ -67,3 +67,113 @@ macro_rules! ratatui_const_char_getter {
         }
     };
 }
+
+// Build an FfiStr from a &'static str
+#[inline]
+pub(crate) fn __ffi_str(s: &'static str) -> crate::FfiStr { crate::FfiStr { ptr: s.as_ptr(), len: s.len() } }
+
+// Define an FFI struct composed of FfiStr fields.
+#[macro_export]
+macro_rules! ratatui_define_ffi_str_struct {
+    ($ffi_name:ident : $( $field:ident ),+ $(,)? ) => {
+        #[repr(C)]
+        #[derive(Copy, Clone)]
+        pub struct $ffi_name { $( pub $field: crate::FfiStr, )+ }
+    };
+}
+
+// Generic struct getter builder: maps a source struct's &str fields into an FfiStr struct.
+#[macro_export]
+macro_rules! ratatui_const_struct_getter {
+    ($fn_name:ident, $ffi_name:ident, $src:path, [ $( $field:ident ),+ $(,)? ]) => {
+        #[no_mangle]
+        pub extern "C" fn $fn_name() -> $crate::$ffi_name {
+            let s = $src;
+            $crate::$ffi_name { $( $field: $crate::ffi::macros::__ffi_str(s.$field) ),+ }
+        }
+    };
+}
+
+// line::Set -> FfiLineSet
+#[macro_export]
+macro_rules! ratatui_const_line_set_getter {
+    ($fn_name:ident, $path:path) => {
+        #[no_mangle]
+        pub extern "C" fn $fn_name() -> crate::FfiLineSet {
+            let s = $path;
+            crate::FfiLineSet {
+                vertical: $crate::ffi::macros::__ffi_str(s.vertical),
+                horizontal: $crate::ffi::macros::__ffi_str(s.horizontal),
+                top_right: $crate::ffi::macros::__ffi_str(s.top_right),
+                top_left: $crate::ffi::macros::__ffi_str(s.top_left),
+                bottom_right: $crate::ffi::macros::__ffi_str(s.bottom_right),
+                bottom_left: $crate::ffi::macros::__ffi_str(s.bottom_left),
+                vertical_left: $crate::ffi::macros::__ffi_str(s.vertical_left),
+                vertical_right: $crate::ffi::macros::__ffi_str(s.vertical_right),
+                horizontal_down: $crate::ffi::macros::__ffi_str(s.horizontal_down),
+                horizontal_up: $crate::ffi::macros::__ffi_str(s.horizontal_up),
+                cross: $crate::ffi::macros::__ffi_str(s.cross),
+            }
+        }
+    };
+}
+
+// border::Set -> FfiBorderSet
+#[macro_export]
+macro_rules! ratatui_const_border_set_getter {
+    ($fn_name:ident, $path:path) => {
+        #[no_mangle]
+        pub extern "C" fn $fn_name() -> crate::FfiBorderSet {
+            let s = $path;
+            crate::FfiBorderSet {
+                top_left: $crate::ffi::macros::__ffi_str(s.top_left),
+                top_right: $crate::ffi::macros::__ffi_str(s.top_right),
+                bottom_left: $crate::ffi::macros::__ffi_str(s.bottom_left),
+                bottom_right: $crate::ffi::macros::__ffi_str(s.bottom_right),
+                vertical_left: $crate::ffi::macros::__ffi_str(s.vertical_left),
+                vertical_right: $crate::ffi::macros::__ffi_str(s.vertical_right),
+                horizontal_top: $crate::ffi::macros::__ffi_str(s.horizontal_top),
+                horizontal_bottom: $crate::ffi::macros::__ffi_str(s.horizontal_bottom),
+            }
+        }
+    };
+}
+
+// block::Set / bar::Set -> FfiLevelSet
+#[macro_export]
+macro_rules! ratatui_const_level_set_getter {
+    ($fn_name:ident, $path:path) => {
+        #[no_mangle]
+        pub extern "C" fn $fn_name() -> crate::FfiLevelSet {
+            let s = $path;
+            crate::FfiLevelSet {
+                full: $crate::ffi::macros::__ffi_str(s.full),
+                seven_eighths: $crate::ffi::macros::__ffi_str(s.seven_eighths),
+                three_quarters: $crate::ffi::macros::__ffi_str(s.three_quarters),
+                five_eighths: $crate::ffi::macros::__ffi_str(s.five_eighths),
+                half: $crate::ffi::macros::__ffi_str(s.half),
+                three_eighths: $crate::ffi::macros::__ffi_str(s.three_eighths),
+                one_quarter: $crate::ffi::macros::__ffi_str(s.one_quarter),
+                one_eighth: $crate::ffi::macros::__ffi_str(s.one_eighth),
+                empty: $crate::ffi::macros::__ffi_str(s.empty),
+            }
+        }
+    };
+}
+
+// symbols::scrollbar::Set -> FfiScrollbarSet
+#[macro_export]
+macro_rules! ratatui_const_scrollbar_set_getter {
+    ($fn_name:ident, $path:path) => {
+        #[no_mangle]
+        pub extern "C" fn $fn_name() -> crate::FfiScrollbarSet {
+            let s = $path;
+            crate::FfiScrollbarSet {
+                track: $crate::ffi::macros::__ffi_str(s.track),
+                thumb: $crate::ffi::macros::__ffi_str(s.thumb),
+                begin: $crate::ffi::macros::__ffi_str(s.begin),
+                end: $crate::ffi::macros::__ffi_str(s.end),
+            }
+        }
+    };
+}

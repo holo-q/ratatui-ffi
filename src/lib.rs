@@ -1306,6 +1306,48 @@ crate::ratatui_const_str_getter!(ratatui_symbols_get_one_eighth_bottom_eight, ra
 crate::ratatui_const_str_getter!(ratatui_symbols_get_one_eighth_left_eight, ratatui::symbols::border::ONE_EIGHTH_LEFT_EIGHT);
 crate::ratatui_const_str_getter!(ratatui_symbols_get_one_eighth_right_eight, ratatui::symbols::border::ONE_EIGHTH_RIGHT_EIGHT);
 
+// line.rs Set getters
+crate::ratatui_const_struct_getter!(ratatui_symbols_get_line_normal, FfiLineSet, ratatui::symbols::line::NORMAL, [vertical, horizontal, top_right, top_left, bottom_right, bottom_left, vertical_left, vertical_right, horizontal_down, horizontal_up, cross]);
+crate::ratatui_const_struct_getter!(ratatui_symbols_get_line_rounded, FfiLineSet, ratatui::symbols::line::ROUNDED, [vertical, horizontal, top_right, top_left, bottom_right, bottom_left, vertical_left, vertical_right, horizontal_down, horizontal_up, cross]);
+crate::ratatui_const_struct_getter!(ratatui_symbols_get_line_double, FfiLineSet, ratatui::symbols::line::DOUBLE, [vertical, horizontal, top_right, top_left, bottom_right, bottom_left, vertical_left, vertical_right, horizontal_down, horizontal_up, cross]);
+crate::ratatui_const_struct_getter!(ratatui_symbols_get_line_thick, FfiLineSet, ratatui::symbols::line::THICK, [vertical, horizontal, top_right, top_left, bottom_right, bottom_left, vertical_left, vertical_right, horizontal_down, horizontal_up, cross]);
+
+// border.rs Set getters
+crate::ratatui_const_struct_getter!(ratatui_symbols_get_border_plain, FfiBorderSet, ratatui::symbols::border::PLAIN, [top_left, top_right, bottom_left, bottom_right, vertical_left, vertical_right, horizontal_top, horizontal_bottom]);
+crate::ratatui_const_struct_getter!(ratatui_symbols_get_border_rounded, FfiBorderSet, ratatui::symbols::border::ROUNDED, [top_left, top_right, bottom_left, bottom_right, vertical_left, vertical_right, horizontal_top, horizontal_bottom]);
+crate::ratatui_const_struct_getter!(ratatui_symbols_get_border_double, FfiBorderSet, ratatui::symbols::border::DOUBLE, [top_left, top_right, bottom_left, bottom_right, vertical_left, vertical_right, horizontal_top, horizontal_bottom]);
+crate::ratatui_const_struct_getter!(ratatui_symbols_get_border_thick, FfiBorderSet, ratatui::symbols::border::THICK, [top_left, top_right, bottom_left, bottom_right, vertical_left, vertical_right, horizontal_top, horizontal_bottom]);
+crate::ratatui_const_struct_getter!(ratatui_symbols_get_border_quadrant_outside, FfiBorderSet, ratatui::symbols::border::QUADRANT_OUTSIDE, [top_left, top_right, bottom_left, bottom_right, vertical_left, vertical_right, horizontal_top, horizontal_bottom]);
+crate::ratatui_const_struct_getter!(ratatui_symbols_get_border_quadrant_inside, FfiBorderSet, ratatui::symbols::border::QUADRANT_INSIDE, [top_left, top_right, bottom_left, bottom_right, vertical_left, vertical_right, horizontal_top, horizontal_bottom]);
+crate::ratatui_const_struct_getter!(ratatui_symbols_get_border_one_eighth_wide, FfiBorderSet, ratatui::symbols::border::ONE_EIGHTH_WIDE, [top_left, top_right, bottom_left, bottom_right, vertical_left, vertical_right, horizontal_top, horizontal_bottom]);
+crate::ratatui_const_struct_getter!(ratatui_symbols_get_border_one_eighth_tall, FfiBorderSet, ratatui::symbols::border::ONE_EIGHTH_TALL, [top_left, top_right, bottom_left, bottom_right, vertical_left, vertical_right, horizontal_top, horizontal_bottom]);
+crate::ratatui_const_struct_getter!(ratatui_symbols_get_border_proportional_wide, FfiBorderSet, ratatui::symbols::border::PROPORTIONAL_WIDE, [top_left, top_right, bottom_left, bottom_right, vertical_left, vertical_right, horizontal_top, horizontal_bottom]);
+crate::ratatui_const_struct_getter!(ratatui_symbols_get_border_proportional_tall, FfiBorderSet, ratatui::symbols::border::PROPORTIONAL_TALL, [top_left, top_right, bottom_left, bottom_right, vertical_left, vertical_right, horizontal_top, horizontal_bottom]);
+crate::ratatui_const_struct_getter!(ratatui_symbols_get_border_full, FfiBorderSet, ratatui::symbols::border::FULL, [top_left, top_right, bottom_left, bottom_right, vertical_left, vertical_right, horizontal_top, horizontal_bottom]);
+
+// symbols.rs base
+crate::ratatui_const_str_getter!(ratatui_symbols_get_dot, ratatui::symbols::DOT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_shade_empty, ratatui::symbols::shade::EMPTY);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_shade_light, ratatui::symbols::shade::LIGHT);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_shade_medium, ratatui::symbols::shade::MEDIUM);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_shade_dark, ratatui::symbols::shade::DARK);
+crate::ratatui_const_str_getter!(ratatui_symbols_get_shade_full, ratatui::symbols::shade::FULL);
+crate::ratatui_const_char_getter!(ratatui_symbols_get_half_block_upper, ratatui::symbols::half_block::UPPER);
+crate::ratatui_const_char_getter!(ratatui_symbols_get_half_block_lower, ratatui::symbols::half_block::LOWER);
+crate::ratatui_const_char_getter!(ratatui_symbols_get_half_block_full, ratatui::symbols::half_block::FULL);
+
+// block/bar level sets
+crate::ratatui_const_struct_getter!(ratatui_symbols_get_block_three_levels, FfiLevelSet, ratatui::symbols::block::THREE_LEVELS, [full, seven_eighths, three_quarters, five_eighths, half, three_eighths, one_quarter, one_eighth, empty]);
+crate::ratatui_const_struct_getter!(ratatui_symbols_get_block_nine_levels, FfiLevelSet, ratatui::symbols::block::NINE_LEVELS, [full, seven_eighths, three_quarters, five_eighths, half, three_eighths, one_quarter, one_eighth, empty]);
+crate::ratatui_const_struct_getter!(ratatui_symbols_get_bar_three_levels, FfiLevelSet, ratatui::symbols::bar::THREE_LEVELS, [full, seven_eighths, three_quarters, five_eighths, half, three_eighths, one_quarter, one_eighth, empty]);
+crate::ratatui_const_struct_getter!(ratatui_symbols_get_bar_nine_levels, FfiLevelSet, ratatui::symbols::bar::NINE_LEVELS, [full, seven_eighths, three_quarters, five_eighths, half, three_eighths, one_quarter, one_eighth, empty]);
+
+// scrollbar sets
+crate::ratatui_const_struct_getter!(ratatui_symbols_get_scrollbar_double_vertical, FfiScrollbarSet, ratatui::symbols::scrollbar::DOUBLE_VERTICAL, [track, thumb, begin, end]);
+crate::ratatui_const_struct_getter!(ratatui_symbols_get_scrollbar_double_horizontal, FfiScrollbarSet, ratatui::symbols::scrollbar::DOUBLE_HORIZONTAL, [track, thumb, begin, end]);
+crate::ratatui_const_struct_getter!(ratatui_symbols_get_scrollbar_vertical, FfiScrollbarSet, ratatui::symbols::scrollbar::VERTICAL, [track, thumb, begin, end]);
+crate::ratatui_const_struct_getter!(ratatui_symbols_get_scrollbar_horizontal, FfiScrollbarSet, ratatui::symbols::scrollbar::HORIZONTAL, [track, thumb, begin, end]);
+
 bitflags::bitflags! {
     #[repr(transparent)]
     pub struct FfiStyleMods: u16 {
@@ -1342,6 +1384,14 @@ pub struct FfiStr {
     pub ptr: *const u8,
     pub len: usize,
 }
+
+// Auto-generated FFI structs for symbol sets (all fields are UTF-8 string slices)
+crate::ratatui_define_ffi_str_struct!(FfiLineSet: vertical, horizontal, top_right, top_left, bottom_right, bottom_left, vertical_left, vertical_right, horizontal_down, horizontal_up, cross);
+crate::ratatui_define_ffi_str_struct!(FfiBorderSet: top_left, top_right, bottom_left, bottom_right, vertical_left, vertical_right, horizontal_top, horizontal_bottom);
+crate::ratatui_define_ffi_str_struct!(FfiLevelSet: full, seven_eighths, three_quarters, five_eighths, half, three_eighths, one_quarter, one_eighth, empty);
+crate::ratatui_define_ffi_str_struct!(FfiScrollbarSet: track, thumb, begin, end);
+
+// (structs generated by macros above)
 
 // Convenience color helpers for building FfiStyle color values
 #[no_mangle]

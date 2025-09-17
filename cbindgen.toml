@@ -16,7 +16,7 @@ include = [
   "FfiLegendPosition", "FfiRenderDirection", "FfiListDirection",
   "FfiScrollbarOrientation", "FfiScrollDirection", "FfiPosition",
   "FfiMapResolution", "FfiSize", "FfiConstraint", "FfiSpacing", "FfiMarker",
-  "FfiClearType", "FfiViewport"
+  "FfiClearType", "FfiViewport", "FfiLineSet", "FfiBorderSet", "FfiLevelSet", "FfiScrollbarSet"
 ]
 
 [parse]
