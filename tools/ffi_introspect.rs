@@ -7,6 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anstyle::{AnsiColor, Style};
 use std::sync::OnceLock;
+use std::io::Write as _;
 // indicatif previously used for spinners; keep clean output now.
 
 fn style_header() -> Style {
@@ -103,11 +104,14 @@ fn extract_source_exports(src: &str) -> Vec<String> {
     for pat in [
         "ratatui_const_str_getter!(",
         "ratatui_const_char_getter!(",
+        "ratatui_const_u16_getter!(",
         "ratatui_const_line_set_getter!(",
         "ratatui_const_border_set_getter!(",
         "ratatui_const_level_set_getter!(",
         "ratatui_const_scrollbar_set_getter!(",
         "ratatui_const_struct_getter!(",
+        "ratatui_const_color_u32_getter!(",
+        "ratatui_const_palette_u32_getter!(",
     ] {
         let mut s = 0usize;
         while let Some(idx) = src[s..].find(pat) {
@@ -825,6 +829,8 @@ fn main() {
     let mut json = false;
     let mut cli_src: Option<PathBuf> = None;
     let mut cli_git: Option<(String, String)> = None;
+    let mut emit_rs: Option<PathBuf> = None;
+    let mut const_root: String = "ratatui".to_string();
     while i < args.len() {
         match args[i].as_str() {
             "--json" => { json = true; i += 1; }
@@ -832,6 +838,14 @@ fn main() {
             "--git" if i + 3 < args.len() && args[i + 2].as_str() == "--tag" => {
                 cli_git = Some((args[i + 1].clone(), args[i + 3].clone()));
                 i += 4;
+            }
+            "--emit-rs" if i + 1 < args.len() => {
+                emit_rs = Some(PathBuf::from(&args[i + 1]));
+                i += 2;
+            }
+            "--const-root" if i + 1 < args.len() => {
+                const_root = args[i + 1].clone();
+                i += 2;
             }
             _ => { i += 1; }
         }
@@ -841,7 +855,13 @@ fn main() {
     let trim_prefix = env::var("FFI_INTROSPECT_TRIM_PREFIX").unwrap_or_else(|_| "ratatui_".to_string());
     let _ = GROUP_TRIM_PREFIX.set(trim_prefix);
     let src_path = root.join("src/lib.rs");
-    let src = read_file(&src_path);
+    let mut src = read_file(&src_path);
+    // Also consider generated include file if present so coverage counts remain accurate
+    let gen_path = root.join("src/ffi/generated.rs");
+    if gen_path.exists() {
+        src.push_str("\n");
+        src.push_str(&read_file(&gen_path));
+    }
     let src_exports = extract_source_exports(&src);
     let lib = find_library(&root);
     let bin_exports = lib
@@ -851,6 +871,14 @@ fn main() {
 
     // Prepare target sources (clone or reuse cache)
     let rat_repo = ensure_target_repo(&root, cli_src, cli_git);
+
+    // If we're emitting code, do it early and exit quietly (write-only mode)
+    if let (Some(repo), Some(out_path)) = (rat_repo.as_ref(), emit_rs.as_ref()) {
+        if let Err(e) = emit_generated_rs(&repo.path, out_path, &const_root) {
+            eprintln!("failed to emit code: {e}");
+        }
+        return;
+    }
 
     let _src_set: BTreeSet<_> = src_exports.iter().cloned().collect();
     let bin_set: BTreeSet<_> = bin_exports.iter().cloned().collect();
@@ -970,4 +998,195 @@ fn main() {
             let _ = fs::remove_dir_all(repo.path);
         }
     }
+}
+
+// ---------- Code generation (generic) ----------
+
+fn rel_module_path(base_src: &Path, file: &Path) -> String {
+    let rel = file.strip_prefix(base_src).unwrap_or(file);
+    let mut parts: Vec<String> = Vec::new();
+    for comp in rel.components() {
+        if let std::path::Component::Normal(os) = comp { parts.push(os.to_string_lossy().to_string()); }
+    }
+    if parts.is_empty() { return String::new(); }
+    let last = parts.pop().unwrap();
+    let stem = last.trim_end_matches(".rs");
+    if stem != "mod" { parts.push(stem.to_string()); }
+    parts.join("::")
+}
+
+#[derive(Debug, Clone)]
+struct StructDef {
+    name: String,
+    fields: Vec<(String, String)>,
+    file: PathBuf,
+}
+
+fn scan_public_structs(repo_src: &Path) -> Vec<StructDef> {
+    let mut out = Vec::new();
+    let mut files = Vec::new();
+    let mut stack = vec![repo_src.to_path_buf()];
+    while let Some(p) = stack.pop() {
+        if p.is_dir() {
+            if let Ok(rd) = fs::read_dir(&p) { for e in rd.flatten() { stack.push(e.path()); } }
+        } else if p.extension().and_then(|e| e.to_str()) == Some("rs") {
+            files.push(p);
+        }
+    }
+    for path in files {
+        let Ok(text) = fs::read_to_string(&path) else { continue; };
+        let mut off = 0usize;
+        while let Some(rel) = text[off..].find("pub struct ") {
+            let start = off + rel + "pub struct ".len();
+            let rest = &text[start..];
+            let name_end = rest.find('{').or_else(|| rest.find(';'));
+            let Some(ne) = name_end else { break; };
+            let header = rest[..ne].trim();
+            let name = header.split_whitespace().next().unwrap_or("");
+            if name.is_empty() { break; }
+            if let Some(bi) = rest.find('{') {
+                let mut depth = 1i32;
+                let mut i = bi + 1;
+                let bytes = rest.as_bytes();
+                let mut body = String::new();
+                while i < rest.len() {
+                    let ch = bytes[i] as char;
+                    if ch == '{' { depth += 1; body.push(ch); i+=1; continue; }
+                    if ch == '}' { depth -= 1; if depth==0 { break; } body.push(ch); i+=1; continue; }
+                    body.push(ch); i+=1;
+                }
+                let mut fields = Vec::new();
+                for line in body.lines() {
+                    let t = line.trim();
+                    if !t.starts_with("pub ") { continue; }
+                    if let Some(colon) = t.find(':') {
+                        let fname = t[4..colon].trim().trim_end_matches(',').to_string();
+                        let fty = t[colon+1..].trim().trim_end_matches(',').to_string();
+                        if !fname.is_empty() && !fty.is_empty() { fields.push((fname, fty)); }
+                    }
+                }
+                out.push(StructDef { name: name.to_string(), fields, file: path.clone() });
+            }
+            off = start + ne;
+        }
+    }
+    out
+}
+
+#[derive(Debug, Clone)]
+struct ConstDef { name: String, ty: String, file: PathBuf }
+
+fn scan_public_consts(repo_src: &Path) -> Vec<ConstDef> {
+    let mut out = Vec::new();
+    let mut files = Vec::new();
+    let mut stack = vec![repo_src.to_path_buf()];
+    while let Some(p) = stack.pop() {
+        if p.is_dir() {
+            if let Ok(rd) = fs::read_dir(&p) { for e in rd.flatten() { stack.push(e.path()); } }
+        } else if p.extension().and_then(|e| e.to_str()) == Some("rs") {
+            files.push(p);
+        }
+    }
+    for path in files {
+        let Ok(text) = fs::read_to_string(&path) else { continue; };
+        let mut off = 0usize;
+        while let Some(rel) = text[off..].find("pub const ") {
+            let start = off + rel + "pub const ".len();
+            let rest = &text[start..];
+            let mut i = 0; while i < rest.len() && rest.as_bytes()[i].is_ascii_whitespace() { i+=1; }
+            let mut j = i; while j < rest.len() { let ch = rest.as_bytes()[j] as char; if ch.is_alphanumeric()||ch=='_' { j+=1; } else { break; } }
+            if j==i { break; }
+            let name = rest[i..j].to_string();
+            let after = &rest[j..];
+            if let Some(colon) = after.find(':') { let at = &after[colon+1..];
+                let end = at.find('=').unwrap_or(at.len());
+                let ty = at[..end].trim().to_string();
+                out.push(ConstDef { name, ty, file: path.clone() });
+            }
+            off = start + j;
+        }
+    }
+    out
+}
+
+fn emit_generated_rs(repo_root: &Path, out_path: &Path, const_root: &str) -> std::io::Result<()> {
+    let base_src = repo_root.join("src");
+    let structs = scan_public_structs(&base_src);
+    let consts = scan_public_consts(&base_src);
+    let mut by_type_consts: BTreeMap<String, Vec<(String, PathBuf)>> = BTreeMap::new();
+    for c in consts {
+        by_type_consts.entry(c.ty.clone()).or_default().push((c.name.clone(), c.file.clone()));
+    }
+    let mut f = std::fs::File::create(out_path)?;
+    writeln!(f, "// @generated by ffi_introspect --emit-rs; do not edit")?;
+    for sd in &structs {
+        let all_str = sd.fields.iter().all(|(_, t)| t.contains("&str"));
+        let all_color = sd.fields.iter().all(|(_, t)| t.trim()=="Color" || t.ends_with("::Color"));
+        if sd.fields.is_empty() { continue; }
+        let field_list = sd.fields.iter().map(|(n,_)| n.as_str()).collect::<Vec<_>>().join(", ");
+        if all_str {
+            let ffi_name = format!("Ffi{}", sd.name);
+            if let Some(items) = by_type_consts.get(&sd.name) {
+                writeln!(f, "crate::ratatui_define_ffi_str_struct!({}: {});", ffi_name, field_list)?;
+                for (cname, file) in items {
+                    let mod_path = rel_module_path(&base_src, file);
+                    let full = if mod_path.is_empty() { format!("{}::{}", const_root, cname) } else { format!("{}::{}::{}", const_root, mod_path.replace('/', "::"), cname) };
+                    // Keep generic naming for non-palette sets for now
+                    let fn_name = format!("ffi_get_{}_{}", mod_path.replace(['/',':'], "_"), to_snake_case(cname));
+                    writeln!(f, "crate::ratatui_const_struct_getter!({}, {}, {} , [{}]);",
+                        fn_name, ffi_name, full, field_list)?;
+                }
+            }
+        } else if all_color {
+            if let Some(items) = by_type_consts.get(&sd.name) {
+                // Decide FFI struct name by scanning all const locations for this type
+                let is_tailwind = items.iter().any(|(_, file)| {
+                    let p = rel_module_path(&base_src, file);
+                    p.starts_with("style::palette::tailwind")
+                });
+                let ffi_name = if is_tailwind {
+                    "FfiTailwindPaletteU32".to_string()
+                } else {
+                    format!("Ffi{}U32", sd.name)
+                };
+                writeln!(f, "crate::ratatui_define_ffi_u32_struct!({}: {});", ffi_name, field_list)?;
+                for (cname, file) in items {
+                    let mod_path = rel_module_path(&base_src, file);
+                    let full = if mod_path.is_empty() { format!("{}::{}", const_root, cname) } else { format!("{}::{}::{}", const_root, mod_path.replace('/', "::"), cname) };
+                    let fn_name = if mod_path.starts_with("style::palette::tailwind") {
+                        format!("ratatui_palette_tailwind_get_{}", to_snake_case(cname))
+                    } else if mod_path.starts_with("style::palette::material") {
+                        format!("ratatui_palette_material_get_{}", to_snake_case(cname))
+                    } else {
+                        format!("ffi_get_{}_{}", mod_path.replace(['/',':'], "_"), to_snake_case(cname))
+                    };
+                    writeln!(f, "crate::ratatui_const_palette_u32_getter!({}, {}, {} , [{}]);",
+                        fn_name, ffi_name, full, field_list)?;
+                }
+            }
+        }
+    }
+
+    // Emit single Color constant getters (e.g., BLACK/WHITE in palettes)
+    for (name, file) in by_type_consts
+        .get("Color")
+        .cloned()
+        .unwrap_or_default()
+    {
+        let mod_path = rel_module_path(&base_src, &file);
+        let full = if mod_path.is_empty() {
+            format!("{}::{}", const_root, name)
+        } else {
+            format!("{}::{}::{}", const_root, mod_path.replace('/', "::"), name)
+        };
+        let fn_name = if mod_path.starts_with("style::palette::tailwind") {
+            format!("ratatui_palette_tailwind_get_{}", to_snake_case(&name))
+        } else if mod_path.starts_with("style::palette::material") {
+            format!("ratatui_palette_material_get_{}", to_snake_case(&name))
+        } else {
+            format!("ffi_get_{}_{}", mod_path.replace(['/',':'], "_"), to_snake_case(&name))
+        };
+        writeln!(f, "crate::ratatui_const_color_u32_getter!({}, {});", fn_name, full)?;
+    }
+    Ok(())
 }

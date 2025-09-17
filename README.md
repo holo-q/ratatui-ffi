@@ -106,14 +106,30 @@ Call `ratatui_ffi_feature_bits()` to detect support at runtime. Bits include:
 
 ## Development
 
-### Introspection Tools
+### Introspection & Codegen
 
-Build Ratatui docs (once) to enable widget coverage detection, then run the introspector:
-```bash
-cargo doc -p ratatui
-cargo run --quiet --bin ffi_introspect
-```
-Outputs grouped export lists and a module summary. Pass `--json` for JSON.
+The `ffi_introspect` tool drives coverage and optional code generation directly from Ratatui sources (no rustdoc scraping).
+
+- One‑shot coverage (no args):
+  - `cargo run --quiet --bin ffi_introspect`
+  - Clones Ratatui `v0.29.0` into `target/ratatui-src/v0.29.0` (cached) and prints a clean, hierarchical, one‑line‑per‑symbol log. Lines are green/red based on whether the function is exported in the built cdylib.
+  - Build first to see green binary coverage: `cargo build --release` (or debug).
+
+- Codegen (emit Rust):
+  - `cargo run --quiet --bin ffi_introspect -- --emit-rs src/ffi/generated.rs`
+  - Scans the target crate for public structs with:
+    - All `&'static str` fields → emits `repr(C)` FFI struct and getter for each public const of that type (e.g., symbol sets).
+    - All `Color` fields → emits `repr(C)` `u32` palette FFI struct and getters (Material/Tailwind), plus single `Color` constants as `u32` getters (BLACK/WHITE).
+  - The library includes the file via `include!("ffi/generated.rs")` so these getters are compiled into the cdylib.
+
+- Target selection (universal tool):
+  - Use your own sources with one of:
+    - `--src PATH` to point at a local checkout
+    - `--git URL --tag TAG` to clone a specific repo+tag
+  - Override the default crate path prefix with `--const-root <path>` (default: `ratatui`).
+  - Environment overrides for convenience: `FFI_INTROSPECT_SRC_PATH` or `RATATUI_SRC_PATH` can point at a local Ratatui checkout and will be used instead of cloning.
+
+Tip: Keep the generated file committed so consumers don’t need the tool at runtime. Re‑run the emitter when Ratatui updates.
 
 ### C Header Generation
 

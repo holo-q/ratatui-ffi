@@ -68,6 +68,18 @@ macro_rules! ratatui_const_char_getter {
     };
 }
 
+// Returns a u16 constant as u16
+#[macro_export]
+macro_rules! ratatui_const_u16_getter {
+    ($fn_name:ident, $path:path) => {
+        #[no_mangle]
+        pub extern "C" fn $fn_name() -> u16 {
+            let v: u16 = $path;
+            v
+        }
+    };
+}
+
 // Build an FfiStr from a &'static str
 #[inline]
 pub(crate) fn __ffi_str(s: &'static str) -> crate::FfiStr { crate::FfiStr { ptr: s.as_ptr(), len: s.len() } }
@@ -90,6 +102,40 @@ macro_rules! ratatui_const_struct_getter {
         pub extern "C" fn $fn_name() -> $crate::$ffi_name {
             let s = $src;
             $crate::$ffi_name { $( $field: $crate::ffi::macros::__ffi_str(s.$field) ),+ }
+        }
+    };
+}
+
+// Define an FFI struct composed of u32 fields (for color palettes as u32 encoded colors)
+#[macro_export]
+macro_rules! ratatui_define_ffi_u32_struct {
+    ($ffi_name:ident : $( $field:ident ),+ $(,)? ) => {
+        #[repr(C)]
+        #[derive(Copy, Clone)]
+        pub struct $ffi_name { $( pub $field: u32, )+ }
+    };
+}
+
+// Get a Color constant as u32 using crate::color_to_u32
+#[macro_export]
+macro_rules! ratatui_const_color_u32_getter {
+    ($fn_name:ident, $path:path) => {
+        #[no_mangle]
+        pub extern "C" fn $fn_name() -> u32 {
+            let c = $path;
+            $crate::color_to_u32(c)
+        }
+    };
+}
+
+// Generic palette struct getter: maps a source struct's Color fields into u32 via color_to_u32
+#[macro_export]
+macro_rules! ratatui_const_palette_u32_getter {
+    ($fn_name:ident, $ffi_name:ident, $src:path, [ $( $field:ident ),+ $(,)? ]) => {
+        #[no_mangle]
+        pub extern "C" fn $fn_name() -> $crate::$ffi_name {
+            let s = $src;
+            $crate::$ffi_name { $( $field: $crate::color_to_u32(s.$field) ),+ }
         }
     };
 }

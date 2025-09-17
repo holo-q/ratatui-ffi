@@ -17,6 +17,8 @@ include = [
   "FfiScrollbarOrientation", "FfiScrollDirection", "FfiPosition",
   "FfiMapResolution", "FfiSize", "FfiConstraint", "FfiSpacing", "FfiMarker",
   "FfiClearType", "FfiViewport", "FfiLineSet", "FfiBorderSet", "FfiLevelSet", "FfiScrollbarSet"
+  , "FfiU16Slice"
+  , "FfiAccentedPaletteU32", "FfiNonAccentedPaletteU32", "FfiTailwindPaletteU32"
 ]
 
 [parse]
