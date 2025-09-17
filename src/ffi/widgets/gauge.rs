@@ -298,44 +298,4 @@ pub extern "C" fn ratatui_headless_render_linegauge(
     }
 }
 
-#[no_mangle]
-pub extern "C" fn ratatui_inject_key(code: u32, ch: u32, mods: u8) {
-    let ke = CtKeyEvent::new(
-        match code {
-            x if x == FfiKeyCode::Char as u32 => {
-                CtKeyCode::Char(char::from_u32(ch).unwrap_or('\0'))
-            }
-            x if x == FfiKeyCode::Enter as u32 => CtKeyCode::Enter,
-            x if x == FfiKeyCode::Left as u32 => CtKeyCode::Left,
-            x if x == FfiKeyCode::Right as u32 => CtKeyCode::Right,
-            x if x == FfiKeyCode::Up as u32 => CtKeyCode::Up,
-            x if x == FfiKeyCode::Down as u32 => CtKeyCode::Down,
-            x if x == FfiKeyCode::Esc as u32 => CtKeyCode::Esc,
-            x if x == FfiKeyCode::Backspace as u32 => CtKeyCode::Backspace,
-            x if x == FfiKeyCode::Tab as u32 => CtKeyCode::Tab,
-            x if x == FfiKeyCode::Delete as u32 => CtKeyCode::Delete,
-            x if x == FfiKeyCode::Home as u32 => CtKeyCode::Home,
-            x if x == FfiKeyCode::End as u32 => CtKeyCode::End,
-            x if x == FfiKeyCode::PageUp as u32 => CtKeyCode::PageUp,
-            x if x == FfiKeyCode::PageDown as u32 => CtKeyCode::PageDown,
-            x if x == FfiKeyCode::Insert as u32 => CtKeyCode::Insert,
-            _ => CtKeyCode::Null,
-        },
-        CtKeyModifiers::from_bits_truncate(
-            (if (mods & FfiKeyMods::SHIFT.bits()) != 0 {
-                CtKeyModifiers::SHIFT.bits()
-            } else {
-                0
-            }) | (if (mods & FfiKeyMods::ALT.bits()) != 0 {
-                CtKeyModifiers::ALT.bits()
-            } else {
-                0
-            }) | (if (mods & FfiKeyMods::CTRL.bits()) != 0 {
-                CtKeyModifiers::CONTROL.bits()
-            } else {
-                0
-            }),
-        ),
-    );
-    INJECTED_EVENTS.lock().unwrap().push_back(CtEvent::Key(ke));
-}
+// moved to widgets::layout

@@ -20,7 +20,10 @@ use ratatui::layout::Rect;
 use ratatui::widgets::canvas::{Canvas as RtCanvas, Line as RtCanvasLine, Points as RtCanvasPoints, Rectangle as RtCanvasRect};
 use std::ffi::{c_char, CString};
 use ratatui::buffer::Buffer;
-use crate::{FfiKeyMods, FfiMouseKind, FfiRect, FfiSpan, FfiStyle, FfiTerminal, INJECTED_EVENTS};
+use crate::{
+    FfiKeyMods, FfiMouseKind, FfiRect, FfiSpan, FfiStyle, FfiTerminal, INJECTED_EVENTS,
+    ratatui_block_title_fn, ratatui_block_title_spans_fn, ratatui_block_title_alignment_fn,
+};
 
 #[repr(C)]
 pub struct FfiCanvasLine {
@@ -62,6 +65,11 @@ pub struct FfiCanvas {
     pub rects: Vec<FfiCanvasRect>,
     pub pts: Vec<(Vec<(f64, f64)>, Color)>,
 }
+
+// Canvas block/title helpers generated via macros
+ratatui_block_title_fn!(ratatui_canvas_set_block_title, FfiCanvas);
+ratatui_block_title_spans_fn!(ratatui_canvas_set_block_title_spans, FfiCanvas);
+ratatui_block_title_alignment_fn!(ratatui_canvas_set_block_title_alignment, FfiCanvas);
 
 #[no_mangle]
 pub extern "C" fn ratatui_canvas_new(
@@ -302,57 +310,7 @@ pub extern "C" fn ratatui_terminal_draw_canvas_in(
     })
 }
 
-#[no_mangle]
-pub extern "C" fn ratatui_inject_mouse(kind: u32, btn: u32, x: u16, y: u16, mods: u8) {
-    let kind = match kind {
-        x if x == FfiMouseKind::Down as u32 => CtMouseKind::Down(match btn {
-            1 => CtMouseButton::Left,
-            2 => CtMouseButton::Right,
-            3 => CtMouseButton::Middle,
-            _ => CtMouseButton::Left,
-        }),
-        x if x == FfiMouseKind::Up as u32 => CtMouseKind::Up(match btn {
-            1 => CtMouseButton::Left,
-            2 => CtMouseButton::Right,
-            3 => CtMouseButton::Middle,
-            _ => CtMouseButton::Left,
-        }),
-        x if x == FfiMouseKind::Drag as u32 => CtMouseKind::Drag(match btn {
-            1 => CtMouseButton::Left,
-            2 => CtMouseButton::Right,
-            3 => CtMouseButton::Middle,
-            _ => CtMouseButton::Left,
-        }),
-        x if x == FfiMouseKind::Moved as u32 => CtMouseKind::Moved,
-        x if x == FfiMouseKind::ScrollUp as u32 => CtMouseKind::ScrollUp,
-        x if x == FfiMouseKind::ScrollDown as u32 => CtMouseKind::ScrollDown,
-        _ => CtMouseKind::Moved,
-    };
-    let modifiers = CtKeyModifiers::from_bits_truncate(
-        (if (mods & FfiKeyMods::SHIFT.bits()) != 0 {
-            CtKeyModifiers::SHIFT.bits()
-        } else {
-            0
-        }) | (if (mods & FfiKeyMods::ALT.bits()) != 0 {
-            CtKeyModifiers::ALT.bits()
-        } else {
-            0
-        }) | (if (mods & FfiKeyMods::CTRL.bits()) != 0 {
-            CtKeyModifiers::CONTROL.bits()
-        } else {
-            0
-        }),
-    );
-    INJECTED_EVENTS
-        .lock()
-        .unwrap()
-        .push_back(CtEvent::Mouse(CtMouseEvent {
-            kind,
-            column: x,
-            row: y,
-            modifiers,
-        }));
-}
+// moved to widgets::layout
 
 #[no_mangle]
 pub extern "C" fn ratatui_headless_render_canvas(

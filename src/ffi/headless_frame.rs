@@ -17,7 +17,7 @@ pub extern "C" fn ratatui_headless_render_frame(
     let Some(slice) = slice_checked(cmds, len, "headless_render_frame(slice)") else {
         return false;
     };
-    for cmd in slice.iter() { render_cmd_to_buffer(cmd, &mut buf); }
+    for cmd in slice.iter() { crate::ffi::render::render_cmd_to_buffer(cmd, &mut buf); }
     let mut s = String::new();
     for y in 0..height {
         for x in 0..width { s.push_str(buf[(x, y)].symbol()); }
@@ -41,7 +41,7 @@ pub extern "C" fn ratatui_headless_render_frame_styles(
     let area = Rect { x: 0, y: 0, width, height };
     let mut buf = Buffer::empty(area);
     let Some(slice) = slice_checked(cmds, len, "headless_render_frame_styles(slice)") else { return false; };
-    for cmd in slice.iter() { render_cmd_to_buffer(cmd, &mut buf); }
+    for cmd in slice.iter() { crate::ffi::render::render_cmd_to_buffer(cmd, &mut buf); }
     let mut s = String::new();
     for y in 0..height {
         for x in 0..width {
@@ -77,7 +77,7 @@ pub extern "C" fn ratatui_headless_render_frame_styles_ex(
     let area = Rect { x: 0, y: 0, width, height };
     let mut buf = Buffer::empty(area);
     let Some(slice) = slice_checked(cmds, len, "headless_render_frame_styles_ex(slice)") else { return false; };
-    for cmd in slice.iter() { render_cmd_to_buffer(cmd, &mut buf); }
+    for cmd in slice.iter() { crate::ffi::render::render_cmd_to_buffer(cmd, &mut buf); }
     let mut s = String::new();
     for y in 0..height {
         for x in 0..width {
@@ -126,4 +126,3 @@ pub extern "C" fn ratatui_headless_render_frame_cells(
     }
     n
 }
-

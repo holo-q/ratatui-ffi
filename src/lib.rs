@@ -2076,13 +2076,9 @@ pub extern "C" fn ratatui_terminal_draw_frame(
     len: usize,
 ) -> bool {
     guard_bool("ratatui_terminal_draw_frame", || {
-        if term.is_null() || cmds.is_null() {
-            return false;
-        }
+        if term.is_null() || cmds.is_null() { return false; }
         let t = unsafe { &mut *term };
-        let Some(slice) = slice_checked(cmds, len, "terminal_draw_frame(slice)") else {
-            return false;
-        };
+        let Some(slice) = slice_checked(cmds, len, "terminal_draw_frame(slice)") else { return false; };
         let res = t.terminal.draw(|frame| {
             let full = frame.area();
             for cmd in slice.iter() {
