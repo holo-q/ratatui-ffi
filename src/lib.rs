@@ -868,136 +868,6 @@ pub extern "C" fn ratatui_terminal_free(term: *mut FfiTerminal) {
     })
 }
 
-#[no_mangle]
-pub extern "C" fn ratatui_paragraph_new(text_utf8: *const c_char) -> *mut FfiParagraph {
-    if text_utf8.is_null() {
-        return ptr::null_mut();
-    }
-    let c_str = unsafe { CStr::from_ptr(text_utf8) };
-    let text = match c_str.to_str() {
-        Ok(s) => s.to_owned(),
-        Err(_) => return ptr::null_mut(),
-    };
-    let mut lines: Vec<Line<'static>> = Vec::new();
-    for l in text.split('\n') {
-        lines.push(Line::from(Span::raw(l.to_string())));
-    }
-    Box::into_raw(Box::new(FfiParagraph {
-        lines,
-        block: None,
-        align: None,
-        wrap_trim: None,
-        scroll_x: None,
-        scroll_y: None,
-        base_style: None,
-    }))
-}
-
-#[no_mangle]
-pub extern "C" fn ratatui_paragraph_new_empty() -> *mut FfiParagraph {
-    Box::into_raw(Box::new(FfiParagraph {
-        lines: Vec::new(),
-        block: None,
-        align: None,
-        wrap_trim: None,
-        scroll_x: None,
-        scroll_y: None,
-        base_style: None,
-    }))
-}
-
-#[no_mangle]
-pub extern "C" fn ratatui_paragraph_append_span(
-    para: *mut FfiParagraph,
-    text_utf8: *const c_char,
-    style: FfiStyle,
-) {
-    if para.is_null() || text_utf8.is_null() {
-        return;
-    }
-    let p = unsafe { &mut *para };
-    let c_str = unsafe { CStr::from_ptr(text_utf8) };
-    if let Ok(s) = c_str.to_str() {
-        let st = style_from_ffi(style);
-        if let Some(last) = p.lines.last_mut() {
-            last.spans.push(Span::styled(s.to_string(), st));
-        } else {
-            p.lines.push(Line::from(Span::styled(s.to_string(), st)));
-        }
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn ratatui_paragraph_append_spans(
-    para: *mut FfiParagraph,
-    spans: *const FfiSpan,
-    len: usize,
-) {
-    if para.is_null() || spans.is_null() || len == 0 {
-        return;
-    }
-    let p = unsafe { &mut *para };
-    if let Some(sp) = spans_from_ffi(spans, len) {
-        if let Some(last) = p.lines.last_mut() {
-            last.spans.extend(sp);
-        } else {
-            p.lines.push(Line::from(sp));
-        }
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn ratatui_paragraph_append_line_spans(
-    para: *mut FfiParagraph,
-    spans: *const FfiSpan,
-    len: usize,
-) {
-    if para.is_null() || spans.is_null() || len == 0 {
-        return;
-    }
-    let p = unsafe { &mut *para };
-    if let Some(sp) = spans_from_ffi(spans, len) {
-        p.lines.push(Line::from(sp));
-    }
-}
-
-// Batch-append multiple lines to a Paragraph (each line specified as spans)
-#[no_mangle]
-pub extern "C" fn ratatui_paragraph_append_lines_spans(
-    para: *mut FfiParagraph,
-    lines: *const FfiLineSpans,
-    len: usize,
-) {
-    if para.is_null() || lines.is_null() || len == 0 {
-        return;
-    }
-    let p = unsafe { &mut *para };
-    let slice = unsafe { std::slice::from_raw_parts(lines, len) };
-    for ls in slice.iter() {
-        if ls.spans.is_null() || ls.len == 0 {
-            p.lines.push(Line::default());
-            continue;
-        }
-        if let Some(sp) = spans_from_ffi(ls.spans, ls.len) {
-            p.lines.push(Line::from(sp));
-        } else {
-            p.lines.push(Line::default());
-        }
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn ratatui_paragraph_line_break(para: *mut FfiParagraph) {
-    if para.is_null() {
-        return;
-    }
-    let p = unsafe { &mut *para };
-    p.lines.push(Line::default());
-}
-
-crate::ratatui_block_title_fn!(ratatui_paragraph_set_block_title, FfiParagraph);
-crate::ratatui_block_title_spans_fn!(ratatui_paragraph_set_block_title_spans, FfiParagraph);
-
 #[repr(u32)]
 pub enum FfiAlign {
     Left = 0,
@@ -1005,41 +875,6 @@ pub enum FfiAlign {
     Right = 2,
 }
 
-#[no_mangle]
-pub extern "C" fn ratatui_paragraph_set_alignment(para: *mut FfiParagraph, align: u32) {
-    if para.is_null() {
-        return;
-    }
-    let p = unsafe { &mut *para };
-    p.align = Some(match align {
-        1 => ratatui::layout::Alignment::Center,
-        2 => ratatui::layout::Alignment::Right,
-        _ => ratatui::layout::Alignment::Left,
-    });
-}
-
-#[no_mangle]
-pub extern "C" fn ratatui_paragraph_set_wrap(para: *mut FfiParagraph, trim: bool) {
-    if para.is_null() {
-        return;
-    }
-    let p = unsafe { &mut *para };
-    p.wrap_trim = Some(trim);
-}
-
-#[no_mangle]
-pub extern "C" fn ratatui_paragraph_set_scroll(para: *mut FfiParagraph, x: u16, y: u16) {
-    if para.is_null() {
-        return;
-    }
-    let p = unsafe { &mut *para };
-    p.scroll_x = Some(x);
-    p.scroll_y = Some(y);
-}
-
-crate::ratatui_set_style_fn!(ratatui_paragraph_set_style, FfiParagraph, base_style);
-
-crate::ratatui_block_adv_fn!(ratatui_paragraph_set_block_adv, FfiParagraph);
 
 crate::ratatui_block_adv_fn!(ratatui_list_set_block_adv, FfiList);
 
@@ -1051,13 +886,7 @@ crate::ratatui_block_adv_fn!(ratatui_linegauge_set_block_adv, FfiLineGauge);
 
 crate::ratatui_block_adv_fn!(ratatui_tabs_set_block_adv, FfiTabs);
 
-#[no_mangle]
-pub extern "C" fn ratatui_paragraph_free(para: *mut FfiParagraph) {
-    if para.is_null() {
-        return;
-    }
-    unsafe { drop(Box::from_raw(para)) };
-}
+// paragraph externs moved to crate::ffi::widgets::paragraph
 
 // ----- Styles -----
 
