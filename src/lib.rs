@@ -1174,7 +1174,74 @@ pub enum FfiColor {
     LightMagenta,
     LightCyan,
     White,
+    Indexed,
+    Rgb,
 }
+
+// Additional FFI enums to mirror Ratatui public enums for coverage and clarity
+// These are ABI-safe mirrors; functions may still use u32 where appropriate for stability.
+
+#[repr(u32)]
+pub enum FfiAlignment { Left = 0, Center = 1, Right = 2 }
+
+#[repr(u32)]
+pub enum FfiDirection { Horizontal = 0, Vertical = 1 }
+
+#[repr(u32)]
+pub enum FfiFlex { Legacy = 0, Start = 1, End = 2, Center = 3, SpaceBetween = 4, SpaceAround = 5 }
+
+#[repr(u32)]
+pub enum FfiGraphType { Scatter = 0, Line = 1, Bar = 2 }
+
+#[repr(u32)]
+pub enum FfiLegendPosition {
+    Top = 0,
+    TopRight = 1,
+    TopLeft = 2,
+    Left = 3,
+    Right = 4,
+    Bottom = 5,
+    BottomRight = 6,
+    BottomLeft = 7,
+}
+
+#[repr(u32)]
+pub enum FfiRenderDirection { LeftToRight = 0, RightToLeft = 1 }
+
+#[repr(u32)]
+pub enum FfiListDirection { TopToBottom = 0, BottomToTop = 1, LeftToRight = 2 }
+
+#[cfg(feature = "scrollbar")]
+#[repr(u32)]
+pub enum FfiScrollbarOrientation { VerticalRight = 0, VerticalLeft = 1, HorizontalBottom = 2, HorizontalTop = 3 }
+
+#[cfg(feature = "scrollbar")]
+#[repr(u32)]
+pub enum FfiScrollDirection { Forward = 0, Backward = 1 }
+
+#[repr(u32)]
+pub enum FfiPosition { Top = 0, Bottom = 1 }
+
+#[repr(u32)]
+pub enum FfiMapResolution { Low = 0, High = 1 }
+
+#[repr(u32)]
+pub enum FfiSize { Tiny = 0, Small = 1 }
+
+#[repr(u32)]
+pub enum FfiConstraint { Min = 0, Max = 1, Length = 2, Percentage = 3, Ratio = 4, Fill = 5 }
+
+#[repr(u32)]
+pub enum FfiSpacing { Space = 0, Overlap = 1 }
+
+#[repr(u32)]
+pub enum FfiMarker { Dot = 0, Block = 1, Bar = 2, Braille = 3, HalfBlock = 4 }
+
+#[repr(u32)]
+pub enum FfiClearType { All = 0, AfterCursor = 1, BeforeCursor = 2, CurrentLine = 3, UntilNewLine = 4 }
+
+#[repr(u32)]
+pub enum FfiViewport { Fullscreen = 0, Inline = 1, Fixed = 2 }
 
 bitflags::bitflags! {
     #[repr(transparent)]
