@@ -867,6 +867,18 @@ fn main() {
         src.push_str("\n");
         src.push_str(&read_file(&gen_path));
     }
+    // Also include simple sibling modules under src/ffi so macro-generated externs in submodules are counted
+    let ffi_dir = root.join("src/ffi");
+    if let Ok(rd) = std::fs::read_dir(&ffi_dir) {
+        for e in rd.flatten() {
+            let p = e.path();
+            if p.file_name().and_then(|s| s.to_str()) == Some("generated.rs") { continue; }
+            if p.extension().and_then(|s| s.to_str()) == Some("rs") {
+                src.push_str("\n");
+                src.push_str(&read_file(&p));
+            }
+        }
+    }
     let src_exports = extract_source_exports(&src);
     let lib = find_library(&root);
     let bin_exports = lib
