@@ -6,6 +6,7 @@ use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anstyle::{AnsiColor, Style};
+use std::sync::OnceLock;
 // indicatif previously used for spinners; keep clean output now.
 
 fn style_header() -> Style {
@@ -334,42 +335,52 @@ fn clone_ratatui(tag: &str) -> Option<PathBuf> {
     }
 }
 
-struct RatatuiRepo {
+struct TargetRepo {
     path: PathBuf,
     cleanup: bool,
 }
 
-fn clone_ratatui_into(tag: &str, dest: &Path) -> bool {
+fn clone_git_into(url: &str, rev: &str, dest: &Path) -> bool {
     if let Some(parent) = dest.parent() {
         let _ = fs::create_dir_all(parent);
     }
     let status = Command::new("git")
         .arg("clone")
-        .arg("--depth")
-        .arg("1")
-        .arg("--branch")
-        .arg(tag)
-        .arg("https://github.com/ratatui-org/ratatui.git")
+        .arg("--depth").arg("1")
+        .arg("--branch").arg(rev)
+        .arg(url)
         .arg(dest)
         .status();
     match status {
         Ok(s) if s.success() => true,
-        _ => {
-            let _ = fs::remove_dir_all(dest);
-            false
-        }
+        _ => { let _ = fs::remove_dir_all(dest); false }
     }
 }
 
-fn ensure_ratatui_repo(root: &Path) -> Option<RatatuiRepo> {
-    if let Ok(override_path) = env::var("RATATUI_SRC_PATH") {
+fn ensure_target_repo(root: &Path, cli_src: Option<PathBuf>, cli_git: Option<(String, String)>) -> Option<TargetRepo> {
+    if let Some(p) = cli_src {
+        if p.exists() { return Some(TargetRepo { path: p, cleanup: false }); }
+    }
+    if let Ok(override_path) = env::var("FFI_INTROSPECT_SRC_PATH").or_else(|_| env::var("RATATUI_SRC_PATH")) {
         let pb = PathBuf::from(override_path);
         if pb.exists() {
-            return Some(RatatuiRepo {
+            return Some(TargetRepo {
                 path: pb,
                 cleanup: false,
             });
         }
+    }
+    if let Some((url, tag)) = cli_git {
+        let repo_name = url.split('/').last().and_then(|s| s.strip_suffix(".git").or(Some(s))).unwrap_or("repo");
+        let cache_path = root.join("target/src-cache").join(repo_name).join(&tag);
+        if cache_path.join(".git").exists() {
+            return Some(TargetRepo { path: cache_path, cleanup: false });
+        }
+        if cache_path.exists() { let _ = fs::remove_dir_all(&cache_path); }
+        if clone_git_into(&url, &tag, &cache_path) {
+            return Some(TargetRepo { path: cache_path, cleanup: false });
+        }
+        return None;
     }
 
     let lock_path = root.join("Cargo.lock");
@@ -378,7 +389,7 @@ fn ensure_ratatui_repo(root: &Path) -> Option<RatatuiRepo> {
     let cache_base = root.join("target/ratatui-src");
     let cache_path = cache_base.join(&tag);
     if cache_path.join(".git").exists() {
-        return Some(RatatuiRepo {
+        return Some(TargetRepo {
             path: cache_path,
             cleanup: false,
         });
@@ -386,14 +397,14 @@ fn ensure_ratatui_repo(root: &Path) -> Option<RatatuiRepo> {
     if cache_path.exists() {
         let _ = fs::remove_dir_all(&cache_path);
     }
-    if clone_ratatui_into(&tag, &cache_path) {
-        return Some(RatatuiRepo {
+    if clone_git_into("https://github.com/ratatui-org/ratatui.git", &tag, &cache_path) {
+        return Some(TargetRepo {
             path: cache_path,
             cleanup: false,
         });
     }
 
-    clone_ratatui(&tag).map(|p| RatatuiRepo {
+    clone_ratatui(&tag).map(|p| TargetRepo {
         path: p,
         cleanup: true,
     })
@@ -755,9 +766,16 @@ fn extract_binary_exports(lib: &Path) -> Vec<String> {
     out
 }
 
+static GROUP_TRIM_PREFIX: OnceLock<String> = OnceLock::new();
 fn group_key(name: &str) -> String {
-    let rest = name.trim_start_matches("ratatui_");
-    rest.split('_').next().unwrap_or("").to_string()
+    // Try to trim a known crate prefix like "ratatui_" to show logical groups
+    let trim = GROUP_TRIM_PREFIX.get().map(|s| s.as_str()).unwrap_or("");
+    let n = if !trim.is_empty() && name.starts_with(trim) {
+        &name[trim.len()..]
+    } else {
+        name
+    };
+    n.split('_').next().unwrap_or("").to_string()
 }
 
 fn json_escape(s: &str) -> String {
@@ -778,8 +796,26 @@ fn json_escape(s: &str) -> String {
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let json = args.get(1).map(|s| s.as_str()) == Some("--json");
+    // Parse flags: --json, --src PATH, --git URL --tag TAG
+    let mut i = 1usize;
+    let mut json = false;
+    let mut cli_src: Option<PathBuf> = None;
+    let mut cli_git: Option<(String, String)> = None;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--json" => { json = true; i += 1; }
+            "--src" if i + 1 < args.len() => { cli_src = Some(PathBuf::from(&args[i + 1])); i += 2; }
+            "--git" if i + 3 < args.len() && args[i + 2].as_str() == "--tag" => {
+                cli_git = Some((args[i + 1].clone(), args[i + 3].clone()));
+                i += 4;
+            }
+            _ => { i += 1; }
+        }
+    }
     let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string()));
+    // Configure grouping and naming conventions
+    let trim_prefix = env::var("FFI_INTROSPECT_TRIM_PREFIX").unwrap_or_else(|_| "ratatui_".to_string());
+    let _ = GROUP_TRIM_PREFIX.set(trim_prefix);
     let src_path = root.join("src/lib.rs");
     let src = read_file(&src_path);
     let src_exports = extract_source_exports(&src);
@@ -789,8 +825,8 @@ fn main() {
         .map(|p| extract_binary_exports(p))
         .unwrap_or_default();
 
-    // Prepare Ratatui sources (clone or reuse cache), no stdout noise
-    let rat_repo = ensure_ratatui_repo(&root);
+    // Prepare target sources (clone or reuse cache)
+    let rat_repo = ensure_target_repo(&root, cli_src, cli_git);
 
     let _src_set: BTreeSet<_> = src_exports.iter().cloned().collect();
     let bin_set: BTreeSet<_> = bin_exports.iter().cloned().collect();
@@ -812,12 +848,9 @@ fn main() {
     }
 
     // Pretty, concise, grouped by type then scope
-    println!("{}", render(&style_header(), "== Ratatui FFI Coverage =="));
+    println!("{}", render(&style_header(), "== FFI Coverage =="));
     if let Some(repo) = rat_repo.as_ref() {
-        println!(
-            "Repo: {}",
-            render(&style_path(), &repo.path.display().to_string())
-        );
+        println!("Target: {}", render(&style_path(), &repo.path.display().to_string()));
     }
     println!(
         "FFI functions: {} (binary: {})",
@@ -841,20 +874,16 @@ fn main() {
     }
 
     if let Some(repo) = rat_repo.as_ref() {
-        // Widgets grouped by scope (directory under src/widgets)
-        println!("\n{}", render(&style_header(), "Widgets"));
-        let widgets = collect_pub_items_detailed(&repo.path, "src/widgets", "struct");
+        // Structs grouped by scope (directory under src)
+        println!("\n{}", render(&style_header(), "Structs"));
+        let structs = collect_pub_items_detailed(&repo.path, "src", "struct");
         let base_src = repo.path.join("src");
         let mut by_scope: BTreeMap<String, Vec<(String, PathBuf)>> = BTreeMap::new();
-        for (name, file) in widgets { by_scope.entry(scope_from(&base_src, &file)).or_default().push((name, file)); }
+        for (name, file) in structs { by_scope.entry(scope_from(&base_src, &file)).or_default().push((name, file)); }
         for (scope, items) in by_scope {
             println!("  [{}]", render(&style_module(), &scope));
-            // Preserve file order, then declaration order
-            for (w, _file) in items {
-                let key = w.to_lowercase();
-                let ok = g_src.contains_key(&key);
-                let mark = if ok { render(&style_ok(), "✔") } else { render(&style_err(), "✘") };
-                println!("    {} {}  [{}]", mark, render(&style_name(), &w), render(&style_group(), &key));
+            for (sname, _file) in items {
+                println!("    {}", render(&style_name(), &sname));
             }
         }
 
@@ -869,27 +898,6 @@ fn main() {
             println!("  [{}]", render(&style_module(), &scope));
             for (rat_name, rat_variants, _file) in items {
                 let ffi_name = format!("Ffi{}", rat_name);
-                // Special-case Color: our FFI uses numeric encoding + helper fns for RGB/Indexed
-                if rat_name == "Color" {
-                    let have_rgb = src_exports.iter().any(|s| s == "ratatui_color_rgb");
-                    let have_idx = src_exports.iter().any(|s| s == "ratatui_color_indexed");
-                    let ok = have_rgb && have_idx;
-                    let mark = if ok { render(&style_ok(), "✔") } else { render(&style_err(), "✘") };
-                    if ok {
-                        println!(
-                            "    {} {}  [mapped via helpers ratatui_color_rgb/indexed]",
-                            mark,
-                            render(&style_name(), &rat_name)
-                        );
-                    } else {
-                        println!(
-                            "    {} {}  [missing color helpers]",
-                            mark,
-                            render(&style_name(), &rat_name)
-                        );
-                    }
-                    continue;
-                }
                 if let Some(ffi_variants) = ffi_enums.get(&ffi_name) {
                     let rset: BTreeSet<_> = rat_variants.iter().cloned().collect();
                     let fset: BTreeSet<_> = ffi_variants.iter().cloned().collect();
@@ -908,7 +916,7 @@ fn main() {
             }
         }
 
-        // Consts (not covered yet -> red), but show origin and mapping suggestion
+        // Consts (generic): show origin and mapping suggestion
         println!("\n{}", render(&style_header(), "Consts"));
         let base_src = repo.path.join("src");
         let mut by_scope: BTreeMap<String, BTreeMap<PathBuf, Vec<PubConst>>> = BTreeMap::new();
@@ -923,16 +931,11 @@ fn main() {
                     let rel = c.file.strip_prefix(&repo.path).unwrap_or(&c.file);
                     let mut decl = render(&style_name(), &c.name);
                     if let Some(t) = &c.type_sig { decl.push_str(&format!(": {}", render(&style_type(), t))); }
-                    let define = format!("RATATUI_{}_{}", c.module_key.to_uppercase(), c.name.to_uppercase());
-                    let getter = format!("ratatui_{}_get_{}", to_snake_case(&c.module_key), to_snake_case(&c.name));
-                    println!(
-                        "    {} {}  ({}) -> define {}, getter {}()",
-                        render(&style_err(), "✘"),
-                        decl,
-                        render(&style_path(), &rel.display().to_string()),
-                        render(&style_map(), &define),
-                        render(&style_map(), &getter)
-                    );
+                    let def_prefix = env::var("FFI_INTROSPECT_DEFINE_PREFIX").unwrap_or_else(|_| "RATATUI".into());
+                    let get_prefix = env::var("FFI_INTROSPECT_GETTER_PREFIX").unwrap_or_else(|_| "ratatui".into());
+                    let define = format!("{}_{}_{}", def_prefix, c.module_key.to_uppercase(), c.name.to_uppercase());
+                    let getter = format!("{}_{}_get_{}", get_prefix, to_snake_case(&c.module_key), to_snake_case(&c.name));
+                    println!("    {}  ({}) -> define {}, getter {}()", decl, render(&style_path(), &rel.display().to_string()), render(&style_map(), &define), render(&style_map(), &getter));
                 }
             }
         }
