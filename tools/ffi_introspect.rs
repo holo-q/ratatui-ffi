@@ -6,7 +6,7 @@ use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anstyle::{AnsiColor, Style};
-use indicatif::{ProgressBar, ProgressStyle};
+// indicatif previously used for spinners; keep clean output now.
 
 fn style_header() -> Style {
     Style::new()
@@ -62,6 +62,41 @@ fn extract_source_exports(src: &str) -> Vec<String> {
             }
             continue;
         }
+    }
+    // Also accept known macro invocations that expand to extern "C" functions
+    // e.g., crate::ratatui_block_title_alignment_fn!(ratatui_paragraph_set_block_title_alignment, FfiParagraph);
+    let macro_pat = "ratatui_block_title_alignment_fn!(";
+    let mut seek = 0usize;
+    while let Some(idx) = src[seek..].find(macro_pat) {
+        let start = seek + idx + macro_pat.len();
+        let rest = &src[start..];
+        // name is the next comma-separated token
+        if let Some(end) = rest.find(',') {
+            let name = rest[..end].trim();
+            if !name.is_empty() {
+                // strip possible namespace like crate::, though we expect a bare ident
+                let nm = name.trim_start_matches("crate::").trim();
+                out.push(nm.to_string());
+            }
+            seek = start + end;
+        } else {
+            break;
+        }
+    }
+    // block_adv macro invocations
+    let macro_pat2 = "ratatui_block_adv_fn!(";
+    let mut seek2 = 0usize;
+    while let Some(idx) = src[seek2..].find(macro_pat2) {
+        let start = seek2 + idx + macro_pat2.len();
+        let rest = &src[start..];
+        if let Some(end) = rest.find(',') {
+            let name = rest[..end].trim();
+            if !name.is_empty() {
+                let nm = name.trim_start_matches("crate::").trim();
+                out.push(nm.to_string());
+            }
+            seek2 = start + end;
+        } else { break; }
     }
     out.sort();
     out.dedup();
@@ -133,7 +168,23 @@ fn extract_enum_variants_from_source(src: &str, enum_name: &str) -> Vec<String> 
                 }
             }
             let body = strip_comments(&body);
-            for part in body.split(',') {
+            // Split by commas at top-level (not inside parentheses)
+            let mut parts: Vec<String> = Vec::new();
+            let mut cur = String::new();
+            let mut depth_paren = 0i32;
+            for ch in body.chars() {
+                match ch {
+                    '(' => { depth_paren += 1; cur.push(ch); }
+                    ')' => { depth_paren -= 1; cur.push(ch); }
+                    ',' if depth_paren == 0 => {
+                        parts.push(cur.trim().to_string());
+                        cur.clear();
+                    }
+                    _ => cur.push(ch),
+                }
+            }
+            if !cur.trim().is_empty() { parts.push(cur.trim().to_string()); }
+            for part in parts {
                 let part = part.trim();
                 if part.is_empty() || part.starts_with('#') {
                     continue;
@@ -431,15 +482,20 @@ fn collect_pub_items_detailed(repo: &Path, subdir: &str, kind: &str) -> Vec<(Str
     let mut out: Vec<(String, PathBuf)> = Vec::new();
     let base = repo.join(subdir);
     let pattern = format!("pub {} ", kind);
+    // Collect files sorted for deterministic scope/file order
+    let mut files: Vec<PathBuf> = Vec::new();
     let mut stack = vec![base.clone()];
     while let Some(path) = stack.pop() {
         if path.is_dir() {
             if let Ok(read) = fs::read_dir(&path) {
                 for entry in read.flatten() { stack.push(entry.path()); }
             }
-            continue;
+        } else if path.extension().and_then(|e| e.to_str()) == Some("rs") {
+            files.push(path);
         }
-        if path.extension().and_then(|e| e.to_str()) != Some("rs") { continue; }
+    }
+    files.sort();
+    for path in files {
         if let Ok(text) = fs::read_to_string(&path) {
             let mut offset = 0usize;
             let bytes = text.as_bytes();
@@ -461,21 +517,25 @@ fn collect_pub_items_detailed(repo: &Path, subdir: &str, kind: &str) -> Vec<(Str
             }
         }
     }
-    out.sort_by(|a, b| a.0.cmp(&b.0));
     out
 }
 
 fn collect_public_enums_with_variants_detailed(src_dir: &Path) -> Vec<(String, Vec<String>, PathBuf)> {
     let mut out: Vec<(String, Vec<String>, PathBuf)> = Vec::new();
+    // Gather files sorted for deterministic order
+    let mut files: Vec<PathBuf> = Vec::new();
     let mut stack = vec![src_dir.to_path_buf()];
     while let Some(path) = stack.pop() {
         if path.is_dir() {
             if let Ok(read) = fs::read_dir(&path) {
                 for entry in read.flatten() { stack.push(entry.path()); }
             }
-            continue;
+        } else if path.extension().and_then(|e| e.to_str()) == Some("rs") {
+            files.push(path);
         }
-        if path.extension().and_then(|e| e.to_str()) != Some("rs") { continue; }
+    }
+    files.sort();
+    for path in files {
         if let Ok(text) = fs::read_to_string(&path) {
             let mut off = 0usize;
             while let Some(rel) = text[off..].find("pub enum ") {
@@ -496,7 +556,6 @@ fn collect_public_enums_with_variants_detailed(src_dir: &Path) -> Vec<(String, V
             }
         }
     }
-    out.sort_by(|a, b| a.0.cmp(&b.0));
     out
 }
 
@@ -534,19 +593,20 @@ struct PubConst {
 fn collect_public_consts_detailed(repo: &Path) -> Vec<PubConst> {
     let mut out: Vec<PubConst> = Vec::new();
     let base = repo.join("src");
+    // Collect and sort files lexicographically for deterministic order
+    let mut files: Vec<PathBuf> = Vec::new();
     let mut stack = vec![base.clone()];
     while let Some(path) = stack.pop() {
         if path.is_dir() {
             if let Ok(read) = fs::read_dir(&path) {
-                for entry in read.flatten() {
-                    stack.push(entry.path());
-                }
+                for entry in read.flatten() { stack.push(entry.path()); }
             }
-            continue;
+        } else if path.extension().and_then(|e| e.to_str()) == Some("rs") {
+            files.push(path);
         }
-        if path.extension().and_then(|e| e.to_str()) != Some("rs") {
-            continue;
-        }
+    }
+    files.sort();
+    for path in files {
         let Ok(text) = fs::read_to_string(&path) else { continue; };
         let bytes = text.as_bytes();
         let mut off = 0usize;
@@ -606,7 +666,6 @@ fn collect_public_consts_detailed(repo: &Path) -> Vec<PubConst> {
             off = start;
         }
     }
-    out.sort_by(|a, b| a.name.cmp(&b.name));
     out
 }
 
@@ -733,7 +792,7 @@ fn main() {
     // Prepare Ratatui sources (clone or reuse cache), no stdout noise
     let rat_repo = ensure_ratatui_repo(&root);
 
-    let src_set: BTreeSet<_> = src_exports.iter().cloned().collect();
+    let _src_set: BTreeSet<_> = src_exports.iter().cloned().collect();
     let bin_set: BTreeSet<_> = bin_exports.iter().cloned().collect();
 
     let mut g_src: BTreeMap<String, usize> = BTreeMap::new();
@@ -786,12 +845,12 @@ fn main() {
         println!("\n{}", render(&style_header(), "Widgets"));
         let widgets = collect_pub_items_detailed(&repo.path, "src/widgets", "struct");
         let base_src = repo.path.join("src");
-        let mut by_scope: BTreeMap<String, Vec<String>> = BTreeMap::new();
-        for (name, file) in widgets { by_scope.entry(scope_from(&base_src, &file)).or_default().push(name); }
-        for (scope, mut names) in by_scope {
-            names.sort();
+        let mut by_scope: BTreeMap<String, Vec<(String, PathBuf)>> = BTreeMap::new();
+        for (name, file) in widgets { by_scope.entry(scope_from(&base_src, &file)).or_default().push((name, file)); }
+        for (scope, items) in by_scope {
             println!("  [{}]", render(&style_module(), &scope));
-            for w in names {
+            // Preserve file order, then declaration order
+            for (w, _file) in items {
                 let key = w.to_lowercase();
                 let ok = g_src.contains_key(&key);
                 let mark = if ok { render(&style_ok(), "✔") } else { render(&style_err(), "✘") };
@@ -804,13 +863,33 @@ fn main() {
         let rat_enums_d = collect_public_enums_with_variants_detailed(&repo.path.join("src"));
         let ffi_enums = collect_ffi_enums_with_variants(&src);
         let base_src = repo.path.join("src");
-        let mut by_scope: BTreeMap<String, Vec<(String, Vec<String>)>> = BTreeMap::new();
-        for (name, vars, file) in rat_enums_d { by_scope.entry(scope_from(&base_src, &file)).or_default().push((name, vars)); }
-        for (scope, mut items) in by_scope {
-            items.sort_by(|a, b| a.0.cmp(&b.0));
+        let mut by_scope: BTreeMap<String, Vec<(String, Vec<String>, PathBuf)>> = BTreeMap::new();
+        for (name, vars, file) in rat_enums_d { by_scope.entry(scope_from(&base_src, &file)).or_default().push((name, vars, file)); }
+        for (scope, items) in by_scope {
             println!("  [{}]", render(&style_module(), &scope));
-            for (rat_name, rat_variants) in items {
+            for (rat_name, rat_variants, _file) in items {
                 let ffi_name = format!("Ffi{}", rat_name);
+                // Special-case Color: our FFI uses numeric encoding + helper fns for RGB/Indexed
+                if rat_name == "Color" {
+                    let have_rgb = src_exports.iter().any(|s| s == "ratatui_color_rgb");
+                    let have_idx = src_exports.iter().any(|s| s == "ratatui_color_indexed");
+                    let ok = have_rgb && have_idx;
+                    let mark = if ok { render(&style_ok(), "✔") } else { render(&style_err(), "✘") };
+                    if ok {
+                        println!(
+                            "    {} {}  [mapped via helpers ratatui_color_rgb/indexed]",
+                            mark,
+                            render(&style_name(), &rat_name)
+                        );
+                    } else {
+                        println!(
+                            "    {} {}  [missing color helpers]",
+                            mark,
+                            render(&style_name(), &rat_name)
+                        );
+                    }
+                    continue;
+                }
                 if let Some(ffi_variants) = ffi_enums.get(&ffi_name) {
                     let rset: BTreeSet<_> = rat_variants.iter().cloned().collect();
                     let fset: BTreeSet<_> = ffi_variants.iter().cloned().collect();
@@ -832,25 +911,29 @@ fn main() {
         // Consts (not covered yet -> red), but show origin and mapping suggestion
         println!("\n{}", render(&style_header(), "Consts"));
         let base_src = repo.path.join("src");
-        let mut by_scope: BTreeMap<String, Vec<PubConst>> = BTreeMap::new();
-        for c in collect_public_consts_detailed(&repo.path) { by_scope.entry(scope_from(&base_src, &c.file)).or_default().push(c); }
-        for (scope, mut items) in by_scope {
-            items.sort_by(|a, b| a.name.cmp(&b.name));
+        let mut by_scope: BTreeMap<String, BTreeMap<PathBuf, Vec<PubConst>>> = BTreeMap::new();
+        for c in collect_public_consts_detailed(&repo.path) {
+            let scope = scope_from(&base_src, &c.file);
+            by_scope.entry(scope).or_default().entry(c.file.clone()).or_default().push(c);
+        }
+        for (scope, files) in by_scope {
             println!("  [{}]", render(&style_module(), &scope));
-            for c in items {
-                let rel = c.file.strip_prefix(&repo.path).unwrap_or(&c.file);
-                let mut decl = render(&style_name(), &c.name);
-                if let Some(t) = &c.type_sig { decl.push_str(&format!(": {}", render(&style_type(), t))); }
-                let define = format!("RATATUI_{}_{}", c.module_key.to_uppercase(), c.name.to_uppercase());
-                let getter = format!("ratatui_{}_get_{}", to_snake_case(&c.module_key), to_snake_case(&c.name));
-                println!(
-                    "    {} {}  ({}) -> define {}, getter {}()",
-                    render(&style_err(), "✘"),
-                    decl,
-                    render(&style_path(), &rel.display().to_string()),
-                    render(&style_map(), &define),
-                    render(&style_map(), &getter)
-                );
+            for (_file, items) in files {
+                for c in items {
+                    let rel = c.file.strip_prefix(&repo.path).unwrap_or(&c.file);
+                    let mut decl = render(&style_name(), &c.name);
+                    if let Some(t) = &c.type_sig { decl.push_str(&format!(": {}", render(&style_type(), t))); }
+                    let define = format!("RATATUI_{}_{}", c.module_key.to_uppercase(), c.name.to_uppercase());
+                    let getter = format!("ratatui_{}_get_{}", to_snake_case(&c.module_key), to_snake_case(&c.name));
+                    println!(
+                        "    {} {}  ({}) -> define {}, getter {}()",
+                        render(&style_err(), "✘"),
+                        decl,
+                        render(&style_path(), &rel.display().to_string()),
+                        render(&style_map(), &define),
+                        render(&style_map(), &getter)
+                    );
+                }
             }
         }
     }

@@ -38,6 +38,7 @@ use ratatui::widgets::{
     Scrollbar as RtScrollbar, ScrollbarOrientation as RtScrollbarOrientation,
     ScrollbarState as RtScrollbarState,
 };
+mod ffi;
 use std::collections::VecDeque;
 use std::sync::Mutex;
 
@@ -1132,173 +1133,17 @@ pub extern "C" fn ratatui_paragraph_set_style(para: *mut FfiParagraph, style: Ff
     p.base_style = Some(style_from_ffi(style));
 }
 
-#[no_mangle]
-pub extern "C" fn ratatui_paragraph_set_block_adv(
-    para: *mut FfiParagraph,
-    borders_bits: u8,
-    border_type: u32,
-    pad_l: u16,
-    pad_t: u16,
-    pad_r: u16,
-    pad_b: u16,
-    title_spans: *const FfiSpan,
-    title_len: usize,
-) {
-    if para.is_null() {
-        return;
-    }
-    let p = unsafe { &mut *para };
-    p.block = Some(build_block_from_adv(
-        borders_bits,
-        border_type,
-        pad_l,
-        pad_t,
-        pad_r,
-        pad_b,
-        title_spans,
-        title_len,
-    ));
-}
+crate::ratatui_block_adv_fn!(ratatui_paragraph_set_block_adv, FfiParagraph);
 
-#[no_mangle]
-pub extern "C" fn ratatui_list_set_block_adv(
-    lst: *mut FfiList,
-    borders_bits: u8,
-    border_type: u32,
-    pad_l: u16,
-    pad_t: u16,
-    pad_r: u16,
-    pad_b: u16,
-    title_spans: *const FfiSpan,
-    title_len: usize,
-) {
-    if lst.is_null() {
-        return;
-    }
-    let l = unsafe { &mut *lst };
-    l.block = Some(build_block_from_adv(
-        borders_bits,
-        border_type,
-        pad_l,
-        pad_t,
-        pad_r,
-        pad_b,
-        title_spans,
-        title_len,
-    ));
-}
+crate::ratatui_block_adv_fn!(ratatui_list_set_block_adv, FfiList);
 
-#[no_mangle]
-pub extern "C" fn ratatui_table_set_block_adv(
-    tbl: *mut FfiTable,
-    borders_bits: u8,
-    border_type: u32,
-    pad_l: u16,
-    pad_t: u16,
-    pad_r: u16,
-    pad_b: u16,
-    title_spans: *const FfiSpan,
-    title_len: usize,
-) {
-    if tbl.is_null() {
-        return;
-    }
-    let t = unsafe { &mut *tbl };
-    t.block = Some(build_block_from_adv(
-        borders_bits,
-        border_type,
-        pad_l,
-        pad_t,
-        pad_r,
-        pad_b,
-        title_spans,
-        title_len,
-    ));
-}
+crate::ratatui_block_adv_fn!(ratatui_table_set_block_adv, FfiTable);
 
-#[no_mangle]
-pub extern "C" fn ratatui_gauge_set_block_adv(
-    g: *mut FfiGauge,
-    borders_bits: u8,
-    border_type: u32,
-    pad_l: u16,
-    pad_t: u16,
-    pad_r: u16,
-    pad_b: u16,
-    title_spans: *const FfiSpan,
-    title_len: usize,
-) {
-    if g.is_null() {
-        return;
-    }
-    let gg = unsafe { &mut *g };
-    gg.block = Some(build_block_from_adv(
-        borders_bits,
-        border_type,
-        pad_l,
-        pad_t,
-        pad_r,
-        pad_b,
-        title_spans,
-        title_len,
-    ));
-}
+crate::ratatui_block_adv_fn!(ratatui_gauge_set_block_adv, FfiGauge);
 
-#[no_mangle]
-pub extern "C" fn ratatui_linegauge_set_block_adv(
-    g: *mut FfiLineGauge,
-    borders_bits: u8,
-    border_type: u32,
-    pad_l: u16,
-    pad_t: u16,
-    pad_r: u16,
-    pad_b: u16,
-    title_spans: *const FfiSpan,
-    title_len: usize,
-) {
-    if g.is_null() {
-        return;
-    }
-    let gg = unsafe { &mut *g };
-    gg.block = Some(build_block_from_adv(
-        borders_bits,
-        border_type,
-        pad_l,
-        pad_t,
-        pad_r,
-        pad_b,
-        title_spans,
-        title_len,
-    ));
-}
+crate::ratatui_block_adv_fn!(ratatui_linegauge_set_block_adv, FfiLineGauge);
 
-#[no_mangle]
-pub extern "C" fn ratatui_tabs_set_block_adv(
-    t: *mut FfiTabs,
-    borders_bits: u8,
-    border_type: u32,
-    pad_l: u16,
-    pad_t: u16,
-    pad_r: u16,
-    pad_b: u16,
-    title_spans: *const FfiSpan,
-    title_len: usize,
-) {
-    if t.is_null() {
-        return;
-    }
-    let tt = unsafe { &mut *t };
-    tt.block = Some(build_block_from_adv(
-        borders_bits,
-        border_type,
-        pad_l,
-        pad_t,
-        pad_r,
-        pad_b,
-        title_spans,
-        title_len,
-    ));
-}
+crate::ratatui_block_adv_fn!(ratatui_tabs_set_block_adv, FfiTabs);
 
 #[no_mangle]
 pub extern "C" fn ratatui_paragraph_free(para: *mut FfiParagraph) {
@@ -1497,115 +1342,17 @@ fn apply_block_title_alignment(b: Block<'static>, align_code: u32) -> Block<'sta
 
 // ----- Block title alignment setters (additive; do not break existing APIs) -----
 
-#[no_mangle]
-pub extern "C" fn ratatui_paragraph_set_block_title_alignment(p: *mut FfiParagraph, align: u32) {
-    if p.is_null() {
-        return;
-    }
-    let para = unsafe { &mut *p };
-    let base = para.block.take().unwrap_or_else(|| Block::default());
-    para.block = Some(apply_block_title_alignment(base, align));
-}
-
-#[no_mangle]
-pub extern "C" fn ratatui_list_set_block_title_alignment(l: *mut FfiList, align: u32) {
-    if l.is_null() {
-        return;
-    }
-    let lst = unsafe { &mut *l };
-    let base = lst.block.take().unwrap_or_else(|| Block::default());
-    lst.block = Some(apply_block_title_alignment(base, align));
-}
-
-#[no_mangle]
-pub extern "C" fn ratatui_table_set_block_title_alignment(t: *mut FfiTable, align: u32) {
-    if t.is_null() {
-        return;
-    }
-    let tbl = unsafe { &mut *t };
-    let base = tbl.block.take().unwrap_or_else(|| Block::default());
-    tbl.block = Some(apply_block_title_alignment(base, align));
-}
-
-#[no_mangle]
-pub extern "C" fn ratatui_gauge_set_block_title_alignment(g: *mut FfiGauge, align: u32) {
-    if g.is_null() {
-        return;
-    }
-    let gg = unsafe { &mut *g };
-    let base = gg.block.take().unwrap_or_else(|| Block::default());
-    gg.block = Some(apply_block_title_alignment(base, align));
-}
-
-#[no_mangle]
-pub extern "C" fn ratatui_linegauge_set_block_title_alignment(g: *mut FfiLineGauge, align: u32) {
-    if g.is_null() {
-        return;
-    }
-    let lg = unsafe { &mut *g };
-    let base = lg.block.take().unwrap_or_else(|| Block::default());
-    lg.block = Some(apply_block_title_alignment(base, align));
-}
-
-#[no_mangle]
-pub extern "C" fn ratatui_tabs_set_block_title_alignment(t: *mut FfiTabs, align: u32) {
-    if t.is_null() {
-        return;
-    }
-    let tt = unsafe { &mut *t };
-    let base = tt.block.take().unwrap_or_else(|| Block::default());
-    tt.block = Some(apply_block_title_alignment(base, align));
-}
-
-#[no_mangle]
-pub extern "C" fn ratatui_barchart_set_block_title_alignment(b: *mut FfiBarChart, align: u32) {
-    if b.is_null() {
-        return;
-    }
-    let bc = unsafe { &mut *b };
-    let base = bc.block.take().unwrap_or_else(|| Block::default());
-    bc.block = Some(apply_block_title_alignment(base, align));
-}
-
-#[no_mangle]
-pub extern "C" fn ratatui_chart_set_block_title_alignment(c: *mut FfiChart, align: u32) {
-    if c.is_null() {
-        return;
-    }
-    let ch = unsafe { &mut *c };
-    let base = ch.block.take().unwrap_or_else(|| Block::default());
-    ch.block = Some(apply_block_title_alignment(base, align));
-}
-
-#[no_mangle]
-pub extern "C" fn ratatui_sparkline_set_block_title_alignment(s: *mut FfiSparkline, align: u32) {
-    if s.is_null() {
-        return;
-    }
-    let sp = unsafe { &mut *s };
-    let base = sp.block.take().unwrap_or_else(|| Block::default());
-    sp.block = Some(apply_block_title_alignment(base, align));
-}
-
-#[no_mangle]
-pub extern "C" fn ratatui_scrollbar_set_block_title_alignment(sb: *mut FfiScrollbar, align: u32) {
-    if sb.is_null() {
-        return;
-    }
-    let sc = unsafe { &mut *sb };
-    let base = sc.block.take().unwrap_or_else(|| Block::default());
-    sc.block = Some(apply_block_title_alignment(base, align));
-}
-
-#[no_mangle]
-pub extern "C" fn ratatui_canvas_set_block_title_alignment(c: *mut FfiCanvas, align: u32) {
-    if c.is_null() {
-        return;
-    }
-    let cv = unsafe { &mut *c };
-    let base = cv.block.take().unwrap_or_else(|| Block::default());
-    cv.block = Some(apply_block_title_alignment(base, align));
-}
+crate::ratatui_block_title_alignment_fn!(ratatui_paragraph_set_block_title_alignment, FfiParagraph);
+crate::ratatui_block_title_alignment_fn!(ratatui_list_set_block_title_alignment, FfiList);
+crate::ratatui_block_title_alignment_fn!(ratatui_table_set_block_title_alignment, FfiTable);
+crate::ratatui_block_title_alignment_fn!(ratatui_gauge_set_block_title_alignment, FfiGauge);
+crate::ratatui_block_title_alignment_fn!(ratatui_linegauge_set_block_title_alignment, FfiLineGauge);
+crate::ratatui_block_title_alignment_fn!(ratatui_tabs_set_block_title_alignment, FfiTabs);
+crate::ratatui_block_title_alignment_fn!(ratatui_barchart_set_block_title_alignment, FfiBarChart);
+crate::ratatui_block_title_alignment_fn!(ratatui_chart_set_block_title_alignment, FfiChart);
+crate::ratatui_block_title_alignment_fn!(ratatui_sparkline_set_block_title_alignment, FfiSparkline);
+crate::ratatui_block_title_alignment_fn!(ratatui_scrollbar_set_block_title_alignment, FfiScrollbar);
+crate::ratatui_block_title_alignment_fn!(ratatui_canvas_set_block_title_alignment, FfiCanvas);
 
 #[repr(u32)]
 pub enum FfiBorderType {
@@ -4809,33 +4556,7 @@ pub extern "C" fn ratatui_barchart_set_block_title_spans(
     bc.block = Some(block);
 }
 
-#[no_mangle]
-pub extern "C" fn ratatui_barchart_set_block_adv(
-    b: *mut FfiBarChart,
-    borders_bits: u8,
-    border_type: u32,
-    pad_l: u16,
-    pad_t: u16,
-    pad_r: u16,
-    pad_b: u16,
-    title_spans: *const FfiSpan,
-    title_len: usize,
-) {
-    if b.is_null() {
-        return;
-    }
-    let bc = unsafe { &mut *b };
-    bc.block = Some(build_block_from_adv(
-        borders_bits,
-        border_type,
-        pad_l,
-        pad_t,
-        pad_r,
-        pad_b,
-        title_spans,
-        title_len,
-    ));
-}
+crate::ratatui_block_adv_fn!(ratatui_barchart_set_block_adv, FfiBarChart);
 
 #[no_mangle]
 pub extern "C" fn ratatui_barchart_set_bar_width(b: *mut FfiBarChart, width: u16) {
@@ -5331,33 +5052,7 @@ pub extern "C" fn ratatui_chart_set_block_title_spans(
     ch.block = Some(block);
 }
 
-#[no_mangle]
-pub extern "C" fn ratatui_chart_set_block_adv(
-    c: *mut FfiChart,
-    borders_bits: u8,
-    border_type: u32,
-    pad_l: u16,
-    pad_t: u16,
-    pad_r: u16,
-    pad_b: u16,
-    title_spans: *const FfiSpan,
-    title_len: usize,
-) {
-    if c.is_null() {
-        return;
-    }
-    let ch = unsafe { &mut *c };
-    ch.block = Some(build_block_from_adv(
-        borders_bits,
-        border_type,
-        pad_l,
-        pad_t,
-        pad_r,
-        pad_b,
-        title_spans,
-        title_len,
-    ));
-}
+crate::ratatui_block_adv_fn!(ratatui_chart_set_block_adv, FfiChart);
 
 #[no_mangle]
 pub extern "C" fn ratatui_terminal_draw_chart_in(
@@ -5669,33 +5364,7 @@ pub extern "C" fn ratatui_sparkline_set_block_title_spans(
     sp.block = Some(block);
 }
 
-#[no_mangle]
-pub extern "C" fn ratatui_sparkline_set_block_adv(
-    s: *mut FfiSparkline,
-    borders_bits: u8,
-    border_type: u32,
-    pad_l: u16,
-    pad_t: u16,
-    pad_r: u16,
-    pad_b: u16,
-    title_spans: *const FfiSpan,
-    title_len: usize,
-) {
-    if s.is_null() {
-        return;
-    }
-    let sp = unsafe { &mut *s };
-    sp.block = Some(build_block_from_adv(
-        borders_bits,
-        border_type,
-        pad_l,
-        pad_t,
-        pad_r,
-        pad_b,
-        title_spans,
-        title_len,
-    ));
-}
+crate::ratatui_block_adv_fn!(ratatui_sparkline_set_block_adv, FfiSparkline);
 
 #[no_mangle]
 pub extern "C" fn ratatui_terminal_draw_sparkline_in(
@@ -5884,35 +5553,9 @@ pub extern "C" fn ratatui_scrollbar_set_orientation_side(s: *mut FfiScrollbar, s
     sb.side = Some(side);
 }
 
-#[no_mangle]
 #[cfg(feature = "scrollbar")]
 #[cfg_attr(docsrs, doc(cfg(feature = "scrollbar")))]
-pub extern "C" fn ratatui_scrollbar_set_block_adv(
-    s: *mut FfiScrollbar,
-    borders_bits: u8,
-    border_type: u32,
-    pad_l: u16,
-    pad_t: u16,
-    pad_r: u16,
-    pad_b: u16,
-    title_spans: *const FfiSpan,
-    title_len: usize,
-) {
-    if s.is_null() {
-        return;
-    }
-    let sb = unsafe { &mut *s };
-    sb.block = Some(build_block_from_adv(
-        borders_bits,
-        border_type,
-        pad_l,
-        pad_t,
-        pad_r,
-        pad_b,
-        title_spans,
-        title_len,
-    ));
-}
+crate::ratatui_block_adv_fn!(ratatui_scrollbar_set_block_adv, FfiScrollbar);
 
 #[no_mangle]
 #[cfg(feature = "scrollbar")]
