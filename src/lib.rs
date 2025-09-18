@@ -232,12 +232,6 @@ pub enum FfiColor {
 
 
 #[repr(u32)]
-pub enum FfiPosition {
-    Top = 0,
-    Bottom = 1,
-}
-
-#[repr(u32)]
 pub enum FfiMapResolution {
     Low = 0,
     High = 1,
@@ -263,15 +257,6 @@ pub enum FfiConstraint {
 pub enum FfiSpacing {
     Space = 0,
     Overlap = 1,
-}
-
-#[repr(u32)]
-pub enum FfiMarker {
-    Dot = 0,
-    Block = 1,
-    Bar = 2,
-    Braille = 3,
-    HalfBlock = 4,
 }
 
 #[repr(u32)]
