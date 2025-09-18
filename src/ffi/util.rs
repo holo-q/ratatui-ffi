@@ -8,7 +8,24 @@ pub fn spans_from_ffi<'a>(spans: *const FfiSpan, len: usize) -> Option<Vec<Span<
     if spans.is_null() {
         return None;
     }
-    let slice = unsafe { std::slice::from_raw_parts(spans, len) };
+    // Sanity limit to avoid OOM if a bogus length arrives from FFI.
+    // Typical TUI usage keeps this comfortably small.
+    const MAX_SPANS: usize = 1_000_000;
+    if len > MAX_SPANS {
+        eprintln!(
+            "ratatui_ffi spans_from_ffi: excessive len={} (>{}), dropping",
+            len, MAX_SPANS
+        );
+        log_line(&format!(
+            "spans_from_ffi: excessive len={}, dropping",
+            len
+        ));
+        return None;
+    }
+    // Validate pointer alignment and computed slice size.
+    let Some(slice) = crate::slice_checked(spans, len, "spans_from_ffi") else {
+        return None;
+    };
     let mut out: Vec<Span<'static>> = Vec::with_capacity(len);
     for s in slice.iter() {
         if s.text_utf8.is_null() {

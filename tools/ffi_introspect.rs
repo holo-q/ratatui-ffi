@@ -1842,15 +1842,15 @@ fn emit_generated_rs(repo_root: &Path, out_path: &Path, gen: &GenConfig) -> std:
         writeln!(f, "use ratatui as rt;")?;
     }
     // Helper to trim optional crate:: prefix in macro names from config
-    let trim_macro = |m: &str| m.rsplit("::").next().unwrap_or(m);
-    let m_struct_str = trim_macro(&gen.m_struct_str);
-    let m_struct_u32 = trim_macro(&gen.m_struct_u32);
-    let m_const_str_getter = trim_macro(&gen.m_const_str_getter);
-    let m_const_char_getter = trim_macro(&gen.m_const_char_getter);
-    let m_const_u16_getter = trim_macro(&gen.m_const_u16_getter);
-    let m_const_struct_getter = trim_macro(&gen.m_const_struct_getter);
-    let m_const_color_u32_getter = trim_macro(&gen.m_const_color_u32_getter);
-    let m_const_palette_u32_getter = trim_macro(&gen.m_const_palette_u32_getter);
+    let trim_macro_name = |m: &str| -> String { m.rsplit("::").next().unwrap_or(m).to_string() };
+    let m_struct_str = trim_macro_name(&gen.m_struct_str);
+    let m_struct_u32 = trim_macro_name(&gen.m_struct_u32);
+    let _m_const_str_getter = trim_macro_name(&gen.m_const_str_getter);
+    let m_const_char_getter = trim_macro_name(&gen.m_const_char_getter);
+    let m_const_u16_getter = trim_macro_name(&gen.m_const_u16_getter);
+    let m_const_struct_getter = trim_macro_name(&gen.m_const_struct_getter);
+    let m_const_color_u32_getter = trim_macro_name(&gen.m_const_color_u32_getter);
+    let m_const_palette_u32_getter = trim_macro_name(&gen.m_const_palette_u32_getter);
     let const_prefix = if gen.const_root == "ratatui" { "rt" } else { &gen.const_root };
     // Index Set structs by module path so we can attach correct fields to consts per module
     use std::collections::BTreeMap as Map;

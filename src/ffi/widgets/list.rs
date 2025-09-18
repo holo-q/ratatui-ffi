@@ -170,6 +170,12 @@ pub extern "C" fn ratatui_terminal_draw_list_state_in(
             width: rect.width,
             height: rect.height,
         };
+        #[cfg(feature = "ffi_safety")]
+        {
+            if !crate::ffi::safety::check_rect_dims(rect) {
+                return false;
+            }
+        }
         let items: Vec<ListItem> = l.items.iter().cloned().map(ListItem::new).collect();
         let mut widget = RtList::new(items);
         if let Some(d) = l.direction {
@@ -188,10 +194,20 @@ pub extern "C" fn ratatui_terminal_draw_list_state_in(
             widget = widget.highlight_spacing(sp.clone());
         }
         let mut state = ratatui::widgets::ListState::default();
-        if let Some(sel) = s.selected {
+        let count = l.items.len();
+        if let Some(mut sel) = s.selected {
+            #[cfg(feature = "ffi_safety")]
+            {
+                sel = sel.min(count.saturating_sub(1));
+            }
             state.select(Some(sel));
         }
-        state = state.with_offset(s.offset);
+        let mut off = s.offset;
+        #[cfg(feature = "ffi_safety")]
+        {
+            off = off.min(count);
+        }
+        state = state.with_offset(off);
         let res = t.terminal.draw(|frame| {
             frame.render_stateful_widget(widget.clone(), area, &mut state);
         });
@@ -273,6 +289,12 @@ pub extern "C" fn ratatui_list_append_item(
     }
     let l = unsafe { &mut *lst };
     let c_str = unsafe { CStr::from_ptr(text_utf8) };
+    #[cfg(feature = "ffi_safety")]
+    {
+        if !crate::ffi::safety::check_text_len(c_str.to_bytes().len()) {
+            return;
+        }
+    }
     if let Ok(s) = c_str.to_str() {
         let st = style_from_ffi(style);
         l.items.push(Line::from(Span::styled(s.to_string(), st)));
@@ -302,6 +324,12 @@ pub extern "C" fn ratatui_list_append_items_spans(
 ) {
     if lst.is_null() || items.is_null() || len == 0 {
         return;
+    }
+    #[cfg(feature = "ffi_safety")]
+    {
+        if !crate::ffi::safety::check_batch_len(len) {
+            return;
+        }
     }
     let l = unsafe { &mut *lst };
     let slice = unsafe { std::slice::from_raw_parts(items, len) };
@@ -393,6 +421,12 @@ pub extern "C" fn ratatui_terminal_draw_list_in(
             width: rect.width,
             height: rect.height,
         };
+        #[cfg(feature = "ffi_safety")]
+        {
+            if !crate::ffi::safety::check_rect_dims(rect) {
+                return false;
+            }
+        }
         let items: Vec<ListItem> = l.items.iter().cloned().map(ListItem::new).collect();
         let mut widget = RtList::new(items);
         if let Some(b) = &l.block {
@@ -405,7 +439,12 @@ pub extern "C" fn ratatui_terminal_draw_list_in(
             widget = widget.highlight_symbol(sym.as_str());
         }
         let res = t.terminal.draw(|frame| {
-            if let Some(sel) = l.selected {
+            if let Some(mut sel) = l.selected {
+                #[cfg(feature = "ffi_safety")]
+                {
+                    let count = l.items.len();
+                    sel = sel.min(count.saturating_sub(1));
+                }
                 let mut state = ratatui::widgets::ListState::default();
                 state.select(Some(sel));
                 frame.render_stateful_widget(widget.clone(), area, &mut state);

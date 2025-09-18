@@ -20,7 +20,18 @@ use ratatui::widgets::{
 pub fn draw_frame(term: &mut FfiTerminal, slice: &[FfiDrawCmd]) -> bool {
     let res = term.terminal.draw(|frame| {
         let full = frame.area();
+        #[cfg(feature = "ffi_safety")]
+        let viewport_rect = FfiRect { x: full.x, y: full.y, width: full.width, height: full.height };
         for cmd in slice.iter() {
+            #[cfg(feature = "ffi_safety")]
+            {
+                if !crate::ffi::safety::check_rect_dims(cmd.rect)
+                    || !crate::ffi::safety::check_rect_in_viewport(cmd.rect, viewport_rect)
+                {
+                    // Skip invalid draw region when safety checks are enabled
+                    continue;
+                }
+            }
             let x = cmd.rect.x.min(full.width.saturating_sub(1));
             let y = cmd.rect.y.min(full.height.saturating_sub(1));
             let max_w = full.width.saturating_sub(x);

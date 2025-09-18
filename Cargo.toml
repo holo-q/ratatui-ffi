@@ -23,6 +23,9 @@ path = "tools/gen_header.rs"
 
 [features]
 default = ["scrollbar" ]
+# Compile-time safety checks (bounds, batch sizes, etc.).
+# Disabled by default; enable for QA/dev to catch invalid inputs crossing the FFI.
+ffi_safety = []
 # Enable experimental Scrollbar support (requires newer Ratatui API). Off by default for crates.io compatibility.
 scrollbar = []
 
