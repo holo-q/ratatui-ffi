@@ -2507,7 +2507,7 @@ fn emit_generated_enums_rs(repo_root: &Path, out_path: &Path, gen: &GenConfig) -
         f,
         "// These enums are ABI-stable u32 mirrors of upstream enums.\n// They intentionally avoid payloads and lifetimes; variants map by name."
     )?;
-    for (name, variants, file) in enums {
+    for (name, variants, _file) in enums {
         if !gen.enums_emit.iter().any(|n| n == &name) {
             continue;
         }
