@@ -265,6 +265,12 @@ pub extern "C" fn ratatui_terminal_draw_canvas_in(
             width: rect.width,
             height: rect.height,
         };
+        #[cfg(feature = "ffi_safety")]
+        {
+            if !crate::ffi::safety::check_rect_dims(rect) {
+                return false;
+            }
+        }
         let mut w = RtCanvas::default()
             .x_bounds([cv.x_min, cv.x_max])
             .y_bounds([cv.y_min, cv.y_max]);

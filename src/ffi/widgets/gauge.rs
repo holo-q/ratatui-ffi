@@ -127,6 +127,18 @@ pub extern "C" fn ratatui_terminal_draw_gauge_in(
             width: rect.width,
             height: rect.height,
         };
+        #[cfg(feature = "ffi_safety")]
+        {
+            if !crate::ffi::safety::check_rect_dims(rect) {
+                return false;
+            }
+        }
+        #[cfg(feature = "ffi_safety")]
+        {
+            if !crate::ffi::safety::check_rect_dims(rect) {
+                return false;
+            }
+        }
         let mut widget = Gauge::default().ratio(gg.ratio as f64);
         if let Some(st) = &gg.style {
             widget = widget.style(st.clone());

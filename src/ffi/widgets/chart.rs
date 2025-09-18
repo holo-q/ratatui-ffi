@@ -389,6 +389,12 @@ pub extern "C" fn ratatui_terminal_draw_chart_in(
             width: rect.width,
             height: rect.height,
         };
+        #[cfg(feature = "ffi_safety")]
+        {
+            if !crate::ffi::safety::check_rect_dims(rect) {
+                return false;
+            }
+        }
         let mut datasets: Vec<RtDataset> = Vec::new();
         for ds in &ch.datasets {
             let mut d = RtDataset::default().name(ds.name.clone()).data(&ds.points);

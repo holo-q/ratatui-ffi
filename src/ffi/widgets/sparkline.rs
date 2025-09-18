@@ -98,6 +98,12 @@ pub extern "C" fn ratatui_terminal_draw_sparkline_in(
             width: rect.width,
             height: rect.height,
         };
+        #[cfg(feature = "ffi_safety")]
+        {
+            if !crate::ffi::safety::check_rect_dims(rect) {
+                return false;
+            }
+        }
         let mut w = RtSparkline::default().data(&sp.values);
         if let Some(bl) = &sp.block {
             w = w.block(bl.clone());

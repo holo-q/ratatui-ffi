@@ -148,12 +148,18 @@ pub extern "C" fn ratatui_terminal_draw_scrollbar_in(
     }
     let t = unsafe { &mut *term };
     let sb = unsafe { &*s };
-    let area = Rect {
-        x: rect.x,
-        y: rect.y,
-        width: rect.width,
-        height: rect.height,
-    };
+        let area = Rect {
+            x: rect.x,
+            y: rect.y,
+            width: rect.width,
+            height: rect.height,
+        };
+        #[cfg(feature = "ffi_safety")]
+        {
+            if !crate::ffi::safety::check_rect_dims(rect) {
+                return false;
+            }
+        }
     let orient = if let Some(side) = sb.side {
         match side {
             0 => RtScrollbarOrientation::VerticalLeft,

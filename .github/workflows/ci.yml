@@ -21,15 +21,21 @@ jobs:
             rid: osx-x64
           - os: macos-14
             rid: osx-arm64
+        feature: [default, ffi_safety]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Build
-        run: cargo build --release
+        run: |
+          if [ "${{ matrix.feature }}" = "ffi_safety" ]; then \
+            cargo build --release --features ffi_safety; \
+          else \
+            cargo build --release; \
+          fi
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.rid }}
+          name: ${{ matrix.rid }}-${{ matrix.feature }}
           path: |
             target/release/*.so
             target/release/*.dll

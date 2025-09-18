@@ -172,6 +172,12 @@ pub extern "C" fn ratatui_terminal_draw_barchart_in(
             width: rect.width,
             height: rect.height,
         };
+        #[cfg(feature = "ffi_safety")]
+        {
+            if !crate::ffi::safety::check_rect_dims(rect) {
+                return false;
+            }
+        }
         let data: Vec<(&str, u64)> = bc
             .labels
             .iter()

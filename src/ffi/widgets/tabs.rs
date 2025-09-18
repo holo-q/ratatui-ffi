@@ -208,6 +208,12 @@ pub extern "C" fn ratatui_terminal_draw_tabs_in(
             width: rect.width,
             height: rect.height,
         };
+        #[cfg(feature = "ffi_safety")]
+        {
+            if !crate::ffi::safety::check_rect_dims(rect) {
+                return false;
+            }
+        }
         let titles: Vec<Line> = if let Some(lines) = &tabs.titles_spans {
             lines.clone()
         } else {
