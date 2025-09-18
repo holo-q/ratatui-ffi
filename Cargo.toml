@@ -77,3 +77,6 @@ macros.const_struct_getter = "crate::ratatui_const_struct_getter!"
 macros.const_color_u32_getter = "crate::ratatui_const_color_u32_getter!"
 macros.const_palette_u32_getter = "crate::ratatui_const_palette_u32_getter!"
 widgets_emit_rs = "src/ffi/generated_widgets.rs"
+enums_emit_rs = "src/ffi/generated_enums.rs"
+enums_emit = ["Alignment", "BorderType", "LegendPosition", "RenderDirection", "ListDirection", "Direction", "Flex", "GraphType", "Position", "Marker"]
+enums_renames = "Alignment=FfiAlign;Position=FfiPosition;Marker=FfiMarker"

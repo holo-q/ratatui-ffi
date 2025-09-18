@@ -40,9 +40,9 @@ pub fn build_block_from_adv(
         bottom: pad_b,
     });
     block = match border_type {
-        1 => block.border_type(RtBorderType::Thick),
+        1 => block.border_type(RtBorderType::Rounded),
         2 => block.border_type(RtBorderType::Double),
-        3 => block.border_type(RtBorderType::Rounded),
+        3 => block.border_type(RtBorderType::Thick),
         4 => block.border_type(RtBorderType::QuadrantInside),
         5 => block.border_type(RtBorderType::QuadrantOutside),
         _ => block.border_type(RtBorderType::Plain),

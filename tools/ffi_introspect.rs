@@ -264,8 +264,25 @@ fn extract_enum_variants_from_source(src: &str, enum_name: &str) -> Vec<String> 
                 parts.push(cur.trim().to_string());
             }
             for part in parts {
+                let mut part = part.trim().to_string();
+                if part.is_empty() {
+                    continue;
+                }
+                // Strip leading attributes like #[default] that may precede a variant
+                // Repeatedly remove #[..] blocks at the start of the line(s)
+                loop {
+                    let p = part.trim_start();
+                    if p.starts_with("#[") {
+                        // find matching ']'
+                        if let Some(end) = p.find(']') {
+                            part = p[end + 1..].to_string();
+                            continue;
+                        }
+                    }
+                    break;
+                }
                 let part = part.trim();
-                if part.is_empty() || part.starts_with('#') {
+                if part.is_empty() {
                     continue;
                 }
                 let mut iter = part.split(|c: char| c == ' ' || c == '=' || c == '(');
@@ -1038,6 +1055,7 @@ fn main() {
     let mut cli_git: Option<(String, String)> = None;
     let mut emit_rs: Option<PathBuf> = None;
     let mut widgets_emit_rs: Option<PathBuf> = None;
+    let mut enums_emit_rs: Option<PathBuf> = None;
     let mut const_root: String = String::new();
     while i < args.len() {
         match args[i].as_str() {
@@ -1061,6 +1079,10 @@ fn main() {
                 widgets_emit_rs = Some(PathBuf::from(&args[i + 1]));
                 i += 2;
             }
+            "--emit-enums-rs" if i + 1 < args.len() => {
+                enums_emit_rs = Some(PathBuf::from(&args[i + 1]));
+                i += 2;
+            }
             "--const-root" if i + 1 < args.len() => {
                 const_root = args[i + 1].clone();
                 i += 2;
@@ -1073,7 +1095,7 @@ fn main() {
     // Load defaults from Cargo.toml metadata when CLI args omitted
     let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string()));
     let cargo_toml = root.join("Cargo.toml");
-    if (emit_rs.is_none() || widgets_emit_rs.is_none()) && cargo_toml.exists() {
+    if (emit_rs.is_none() || widgets_emit_rs.is_none() || enums_emit_rs.is_none()) && cargo_toml.exists() {
         if let Ok(txt) = std::fs::read_to_string(&cargo_toml) {
             // very light parser for [package.metadata.ffi_introspect]
             let mut in_sec = false;
@@ -1095,6 +1117,8 @@ fn main() {
                         const_root = val;
                     } else if key == "widgets_emit_rs" && !val.is_empty() {
                         widgets_emit_rs = Some(root.join(val));
+                    } else if key == "enums_emit_rs" && !val.is_empty() {
+                        enums_emit_rs = Some(root.join(val));
                     }
                 }
             }
@@ -1157,25 +1181,22 @@ fn main() {
     // Prepare target sources (clone or reuse cache)
     let rat_repo = ensure_target_repo(&root, cli_src, cli_git);
 
-    // If we're emitting code, do it early and exit quietly (write-only mode)
+    // If emitting, do so early but continue to print coverage as well
     if let Some(repo) = rat_repo.as_ref() {
-        let mut emitted = false;
         if let Some(out_path) = emit_rs.as_ref() {
             if let Err(e) = emit_generated_rs(&repo.path, out_path, &gen_cfg) {
                 eprintln!("failed to emit code: {e}");
-            } else {
-                emitted = true;
             }
         }
         if let Some(out_widgets) = widgets_emit_rs.as_ref() {
             if let Err(e) = emit_generated_widgets_rs(&repo.path, out_widgets, &gen_cfg) {
                 eprintln!("failed to emit widgets code: {e}");
-            } else {
-                emitted = true;
             }
         }
-        if emitted {
-            return;
+        if let Some(out_enums) = enums_emit_rs.as_ref() {
+            if let Err(e) = emit_generated_enums_rs(&repo.path, out_enums, &gen_cfg) {
+                eprintln!("failed to emit enums code: {e}");
+            }
         }
     }
 
@@ -1603,6 +1624,8 @@ struct GenConfig {
     dto_enum_u32: Vec<String>,
     dto_renames: BTreeMap<String, String>,
     const_modules: Vec<(String, String)>,
+    enums_emit: Vec<String>,
+    enums_renames: BTreeMap<String, String>,
 }
 
 fn read_gen_config(root: &Path, cli_const_root: &str) -> GenConfig {
@@ -1643,6 +1666,8 @@ fn read_gen_config(root: &Path, cli_const_root: &str) -> GenConfig {
         dto_enum_u32: Vec::new(),
         dto_renames: BTreeMap::new(),
         const_modules: Vec::new(),
+        enums_emit: Vec::new(),
+        enums_renames: BTreeMap::new(),
     };
     if let Ok(txt) = std::fs::read_to_string(&cargo_toml) {
         let mut in_sec = false;
@@ -1767,6 +1792,29 @@ fn read_gen_config(root: &Path, cli_const_root: &str) -> GenConfig {
                             "const_palette_u32_getter" => cfg.m_const_palette_u32_getter = val,
                             _ => {}
                         }
+                    }
+                    "enums_emit" => {
+                        let v = val.trim_matches(&['[', ']'][..]).to_string();
+                        let items = v
+                            .split(',')
+                            .map(|s| s.trim().trim_matches('"').to_string())
+                            .filter(|s| !s.is_empty())
+                            .collect::<Vec<_>>();
+                        if !items.is_empty() {
+                            cfg.enums_emit = items;
+                        }
+                    }
+                    "enums_renames" => {
+                        let entries = val.split(';');
+                        let mut remap = BTreeMap::new();
+                        for entry in entries {
+                            let e = entry.trim().trim_matches('"');
+                            if e.is_empty() { continue; }
+                            if let Some((key, value)) = e.split_once('=') {
+                                remap.insert(key.trim().to_string(), value.trim().to_string());
+                            }
+                        }
+                        if !remap.is_empty() { cfg.enums_renames = remap; }
                     }
                     _ => {}
                 }
@@ -2442,6 +2490,42 @@ fn emit_generated_widgets_rs(
         )?;
         for (n, mty) in mapped {
             writeln!(f, "    pub {}: {},", n, mty)?;
+        }
+        writeln!(f, "}}\n")?;
+    }
+    Ok(())
+}
+
+// Emit FFI enums that mirror selected public enums as repr(u32)
+fn emit_generated_enums_rs(repo_root: &Path, out_path: &Path, gen: &GenConfig) -> std::io::Result<()> {
+    let src_dir = repo_root.join("src");
+    let enums = collect_public_enums_with_variants_detailed(&src_dir);
+    let mut f = std::fs::File::create(out_path)?;
+    writeln!(f, "// @generated by ffi_introspect --emit-enums-rs; do not edit")?;
+    // Comments on philosophy
+    writeln!(
+        f,
+        "// These enums are ABI-stable u32 mirrors of upstream enums.\n// They intentionally avoid payloads and lifetimes; variants map by name."
+    )?;
+    for (name, variants, file) in enums {
+        if !gen.enums_emit.iter().any(|n| n == &name) {
+            continue;
+        }
+        let ffi_name = gen
+            .enums_renames
+            .get(&name)
+            .cloned()
+            .unwrap_or_else(|| format!("Ffi{}", name));
+        writeln!(f, "#[repr(u32)]\npub enum {} {{", ffi_name)?;
+        for (idx, v) in variants.iter().enumerate() {
+            // strip anything after identifier (e.g., Variant(…) or Variant = …)
+            let ident = v.split(|c: char| c == '(' || c == '=' || c.is_whitespace()).next().unwrap_or("");
+            if ident.is_empty() { continue; }
+            if idx == 0 {
+                writeln!(f, "    {} = 0,", ident)?;
+            } else {
+                writeln!(f, "    {},", ident)?;
+            }
         }
         writeln!(f, "}}\n")?;
     }
