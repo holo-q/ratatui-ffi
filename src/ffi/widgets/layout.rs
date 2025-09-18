@@ -5,13 +5,18 @@
 
 // use crate::*; // enable when moving implementations
 
-use ratatui::layout::{Constraint, Direction, Layout, Rect};
-use crossterm::{event, execute};
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen};
-use std::io::stdout;
-use crossterm::event::{Event as CtEvent, KeyCode as CtKeyCode, KeyEvent as CtKeyEvent, KeyModifiers as CtKeyModifiers, MouseButton as CtMouseButton, MouseEvent as CtMouseEvent, MouseEventKind as CtMouseKind};
 use crate::{FfiEvent, FfiRect, FfiTerminal, INJECTED_EVENTS};
 use crate::{FfiKeyCode, FfiKeyMods, FfiMouseKind};
+use crossterm::event::{
+    Event as CtEvent, KeyCode as CtKeyCode, KeyEvent as CtKeyEvent, KeyModifiers as CtKeyModifiers,
+    MouseButton as CtMouseButton, MouseEvent as CtMouseEvent, MouseEventKind as CtMouseKind,
+};
+use crossterm::terminal::{
+    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+};
+use crossterm::{event, execute};
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use std::io::stdout;
 
 #[no_mangle]
 pub extern "C" fn ratatui_terminal_size(out_width: *mut u16, out_height: *mut u16) -> bool {
@@ -296,6 +301,7 @@ pub extern "C" fn ratatui_layout_split_ex2(
     n
 }
 
+#[allow(dead_code)]
 #[repr(u32)]
 pub enum FfiConstraintKind {
     Length = 0,
@@ -391,7 +397,9 @@ pub extern "C" fn ratatui_next_event(timeout_ms: u64, out_event: *mut FfiEvent) 
 pub extern "C" fn ratatui_inject_key(code: u32, ch: u32, mods: u8) {
     let ke = CtKeyEvent::new(
         match code {
-            x if x == FfiKeyCode::Char as u32 => CtKeyCode::Char(char::from_u32(ch).unwrap_or('\0')),
+            x if x == FfiKeyCode::Char as u32 => {
+                CtKeyCode::Char(char::from_u32(ch).unwrap_or('\0'))
+            }
             x if x == FfiKeyCode::Enter as u32 => CtKeyCode::Enter,
             x if x == FfiKeyCode::Left as u32 => CtKeyCode::Left,
             x if x == FfiKeyCode::Right as u32 => CtKeyCode::Right,
@@ -409,9 +417,19 @@ pub extern "C" fn ratatui_inject_key(code: u32, ch: u32, mods: u8) {
             _ => CtKeyCode::Null,
         },
         CtKeyModifiers::from_bits_truncate(
-            (if (mods & FfiKeyMods::SHIFT.bits()) != 0 { CtKeyModifiers::SHIFT.bits() } else { 0 }) |
-            (if (mods & FfiKeyMods::ALT.bits()) != 0 { CtKeyModifiers::ALT.bits() } else { 0 }) |
-            (if (mods & FfiKeyMods::CTRL.bits()) != 0 { CtKeyModifiers::CONTROL.bits() } else { 0 }),
+            (if (mods & FfiKeyMods::SHIFT.bits()) != 0 {
+                CtKeyModifiers::SHIFT.bits()
+            } else {
+                0
+            }) | (if (mods & FfiKeyMods::ALT.bits()) != 0 {
+                CtKeyModifiers::ALT.bits()
+            } else {
+                0
+            }) | (if (mods & FfiKeyMods::CTRL.bits()) != 0 {
+                CtKeyModifiers::CONTROL.bits()
+            } else {
+                0
+            }),
         ),
     );
     INJECTED_EVENTS.lock().unwrap().push_back(CtEvent::Key(ke));
@@ -420,18 +438,51 @@ pub extern "C" fn ratatui_inject_key(code: u32, ch: u32, mods: u8) {
 #[no_mangle]
 pub extern "C" fn ratatui_inject_mouse(kind: u32, btn: u32, x: u16, y: u16, mods: u8) {
     let kind = match kind {
-        x if x == FfiMouseKind::Down as u32 => CtMouseKind::Down(match btn { 1 => CtMouseButton::Left, 2 => CtMouseButton::Right, 3 => CtMouseButton::Middle, _ => CtMouseButton::Left }),
-        x if x == FfiMouseKind::Up as u32 => CtMouseKind::Up(match btn { 1 => CtMouseButton::Left, 2 => CtMouseButton::Right, 3 => CtMouseButton::Middle, _ => CtMouseButton::Left }),
-        x if x == FfiMouseKind::Drag as u32 => CtMouseKind::Drag(match btn { 1 => CtMouseButton::Left, 2 => CtMouseButton::Right, 3 => CtMouseButton::Middle, _ => CtMouseButton::Left }),
+        x if x == FfiMouseKind::Down as u32 => CtMouseKind::Down(match btn {
+            1 => CtMouseButton::Left,
+            2 => CtMouseButton::Right,
+            3 => CtMouseButton::Middle,
+            _ => CtMouseButton::Left,
+        }),
+        x if x == FfiMouseKind::Up as u32 => CtMouseKind::Up(match btn {
+            1 => CtMouseButton::Left,
+            2 => CtMouseButton::Right,
+            3 => CtMouseButton::Middle,
+            _ => CtMouseButton::Left,
+        }),
+        x if x == FfiMouseKind::Drag as u32 => CtMouseKind::Drag(match btn {
+            1 => CtMouseButton::Left,
+            2 => CtMouseButton::Right,
+            3 => CtMouseButton::Middle,
+            _ => CtMouseButton::Left,
+        }),
         x if x == FfiMouseKind::Moved as u32 => CtMouseKind::Moved,
         x if x == FfiMouseKind::ScrollUp as u32 => CtMouseKind::ScrollUp,
         x if x == FfiMouseKind::ScrollDown as u32 => CtMouseKind::ScrollDown,
         _ => CtMouseKind::Moved,
     };
     let modifiers = CtKeyModifiers::from_bits_truncate(
-        (if (mods & FfiKeyMods::SHIFT.bits()) != 0 { CtKeyModifiers::SHIFT.bits() } else { 0 }) |
-        (if (mods & FfiKeyMods::ALT.bits()) != 0 { CtKeyModifiers::ALT.bits() } else { 0 }) |
-        (if (mods & FfiKeyMods::CTRL.bits()) != 0 { CtKeyModifiers::CONTROL.bits() } else { 0 }),
+        (if (mods & FfiKeyMods::SHIFT.bits()) != 0 {
+            CtKeyModifiers::SHIFT.bits()
+        } else {
+            0
+        }) | (if (mods & FfiKeyMods::ALT.bits()) != 0 {
+            CtKeyModifiers::ALT.bits()
+        } else {
+            0
+        }) | (if (mods & FfiKeyMods::CTRL.bits()) != 0 {
+            CtKeyModifiers::CONTROL.bits()
+        } else {
+            0
+        }),
     );
-    INJECTED_EVENTS.lock().unwrap().push_back(CtEvent::Mouse(CtMouseEvent { kind, column: x, row: y, modifiers }));
+    INJECTED_EVENTS
+        .lock()
+        .unwrap()
+        .push_back(CtEvent::Mouse(CtMouseEvent {
+            kind,
+            column: x,
+            row: y,
+            modifiers,
+        }));
 }

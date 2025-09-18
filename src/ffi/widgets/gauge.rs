@@ -1,4 +1,9 @@
 use crate::*;
+use ratatui::buffer::Buffer;
+use ratatui::layout::Rect;
+use ratatui::prelude::Line;
+use ratatui::style::Style;
+use ratatui::widgets::{Block, Gauge, LineGauge as RtLineGauge};
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 
@@ -16,21 +21,38 @@ pub extern "C" fn ratatui_gauge_new() -> *mut FfiGauge {
 
 #[no_mangle]
 pub extern "C" fn ratatui_gauge_free(g: *mut FfiGauge) {
-    if g.is_null() { return; }
-    unsafe { drop(Box::from_raw(g)); }
+    if g.is_null() {
+        return;
+    }
+    unsafe {
+        drop(Box::from_raw(g));
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn ratatui_gauge_set_ratio(g: *mut FfiGauge, ratio: f32) {
-    if g.is_null() { return; }
-    unsafe { (&mut *g).ratio = ratio.clamp(0.0, 1.0); }
+    if g.is_null() {
+        return;
+    }
+    unsafe {
+        (&mut *g).ratio = ratio.clamp(0.0, 1.0);
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn ratatui_gauge_set_label(g: *mut FfiGauge, label: *const c_char) {
-    if g.is_null() { return; }
+    if g.is_null() {
+        return;
+    }
     let gg = unsafe { &mut *g };
-    gg.label = if label.is_null() { None } else { unsafe { CStr::from_ptr(label) }.to_str().ok().map(|s| s.to_string()) };
+    gg.label = if label.is_null() {
+        None
+    } else {
+        unsafe { CStr::from_ptr(label) }
+            .to_str()
+            .ok()
+            .map(|s| s.to_string())
+    };
 }
 
 // Span-based label for Gauge (preferred)
@@ -40,14 +62,23 @@ pub extern "C" fn ratatui_gauge_set_label_spans(
     spans: *const FfiSpan,
     len: usize,
 ) {
-    if g.is_null() { return; }
+    if g.is_null() {
+        return;
+    }
     let gg = unsafe { &mut *g };
-    if spans.is_null() || len == 0 { gg.label = Some(String::new()); return; }
+    if spans.is_null() || len == 0 {
+        gg.label = Some(String::new());
+        return;
+    }
     let slice = unsafe { std::slice::from_raw_parts(spans, len) };
     let mut s = String::new();
     for sp in slice.iter() {
-        if sp.text_utf8.is_null() { continue; }
-        if let Ok(txt) = unsafe { CStr::from_ptr(sp.text_utf8) }.to_str() { s.push_str(txt); }
+        if sp.text_utf8.is_null() {
+            continue;
+        }
+        if let Ok(txt) = unsafe { CStr::from_ptr(sp.text_utf8) }.to_str() {
+            s.push_str(txt);
+        }
     }
     gg.label = Some(s);
 }
@@ -59,7 +90,9 @@ pub extern "C" fn ratatui_gauge_set_styles(
     label_style: FfiStyle,
     gauge_style: FfiStyle,
 ) {
-    if g.is_null() { return; }
+    if g.is_null() {
+        return;
+    }
     let gg = unsafe { &mut *g };
     gg.style = Some(style_from_ffi(style));
     gg.label_style = Some(style_from_ffi(label_style));
@@ -83,17 +116,36 @@ pub extern "C" fn ratatui_terminal_draw_gauge_in(
     rect: FfiRect,
 ) -> bool {
     crate::guard_bool("ratatui_terminal_draw_gauge_in", || {
-        if term.is_null() || g.is_null() { return false; }
+        if term.is_null() || g.is_null() {
+            return false;
+        }
         let t = unsafe { &mut *term };
         let gg = unsafe { &*g };
-        let area = Rect { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+        let area = Rect {
+            x: rect.x,
+            y: rect.y,
+            width: rect.width,
+            height: rect.height,
+        };
         let mut widget = Gauge::default().ratio(gg.ratio as f64);
-        if let Some(st) = &gg.style { widget = widget.style(st.clone()); }
-        if let Some(label) = &gg.label { widget = widget.label(label.clone()); }
-        if let Some(st) = &gg.label_style { widget = widget.set_style(st.clone()); }
-        if let Some(st) = &gg.gauge_style { widget = widget.gauge_style(st.clone()); }
-        if let Some(b) = &gg.block { widget = widget.block(b.clone()); }
-        let res = t.terminal.draw(|frame| { frame.render_widget(widget.clone(), area); });
+        if let Some(st) = &gg.style {
+            widget = widget.style(st.clone());
+        }
+        if let Some(label) = &gg.label {
+            widget = widget.label(label.clone());
+        }
+        if let Some(st) = &gg.label_style {
+            widget = widget.style(st.clone());
+        }
+        if let Some(st) = &gg.gauge_style {
+            widget = widget.gauge_style(st.clone());
+        }
+        if let Some(b) = &gg.block {
+            widget = widget.block(b.clone());
+        }
+        let res = t.terminal.draw(|frame| {
+            frame.render_widget(widget.clone(), area);
+        });
         res.is_ok()
     })
 }
@@ -105,20 +157,52 @@ pub extern "C" fn ratatui_headless_render_gauge(
     g: *const FfiGauge,
     out_text_utf8: *mut *mut c_char,
 ) -> bool {
-    if g.is_null() || out_text_utf8.is_null() { return false; }
+    if g.is_null() || out_text_utf8.is_null() {
+        return false;
+    }
     let gg = unsafe { &*g };
-    let area = Rect { x: 0, y: 0, width, height };
+    let area = Rect {
+        x: 0,
+        y: 0,
+        width,
+        height,
+    };
     let mut buf = Buffer::empty(area);
     let mut w = Gauge::default().ratio(gg.ratio as f64);
-    if let Some(st) = &gg.style { w = w.style(st.clone()); }
-    if let Some(label) = &gg.label { w = w.label(label.clone()); }
-    if let Some(st) = &gg.label_style { w = w.set_style(st.clone()); }
-    if let Some(st) = &gg.gauge_style { w = w.gauge_style(st.clone()); }
-    if let Some(b) = &gg.block { w = w.block(b.clone()); }
+    if let Some(st) = &gg.style {
+        w = w.style(st.clone());
+    }
+    if let Some(label) = &gg.label {
+        w = w.label(label.clone());
+    }
+    if let Some(st) = &gg.label_style {
+        w = w.style(st.clone());
+    }
+    if let Some(st) = &gg.gauge_style {
+        w = w.gauge_style(st.clone());
+    }
+    if let Some(b) = &gg.block {
+        w = w.block(b.clone());
+    }
     ratatui::widgets::Widget::render(w, area, &mut buf);
     let mut s = String::new();
-    for y in 0..height { for x in 0..width { s.push_str(buf[(x, y)].symbol()); } if y + 1 < height { s.push('\n'); } }
-    match CString::new(s) { Ok(cstr) => { unsafe { *out_text_utf8 = cstr.into_raw(); } true }, Err(_) => false }
+    for y in 0..height {
+        for x in 0..width {
+            s.push_str(buf[(x, y)].symbol());
+        }
+        if y + 1 < height {
+            s.push('\n');
+        }
+    }
+    match CString::new(s) {
+        Ok(cstr) => {
+            unsafe {
+                *out_text_utf8 = cstr.into_raw();
+            }
+            true
+        }
+        Err(_) => false,
+    }
 }
 
 #[repr(C)]
@@ -172,7 +256,10 @@ pub extern "C" fn ratatui_linegauge_set_ratio(g: *mut FfiLineGauge, ratio: f32) 
 }
 
 #[no_mangle]
-pub extern "C" fn ratatui_linegauge_set_label(g: *mut FfiLineGauge, label_utf8: *const std::ffi::c_char) {
+pub extern "C" fn ratatui_linegauge_set_label(
+    g: *mut FfiLineGauge,
+    label_utf8: *const std::ffi::c_char,
+) {
     if g.is_null() {
         return;
     }
@@ -248,10 +335,10 @@ pub extern "C" fn ratatui_terminal_draw_linegauge_in(
 
 #[no_mangle]
 pub extern "C" fn ratatui_headless_render_linegauge(
-	width: u16,
-	height: u16,
-	g: *const FfiLineGauge,
-	out_text_utf8: *mut *mut std::ffi::c_char,
+    width: u16,
+    height: u16,
+    g: *const FfiLineGauge,
+    out_text_utf8: *mut *mut std::ffi::c_char,
 ) -> bool {
     if g.is_null() || out_text_utf8.is_null() {
         return false;

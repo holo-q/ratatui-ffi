@@ -13,12 +13,11 @@
 // use crate::*; // enable when moving implementations
 
 use crate::{
-    ratatui_block_adv_fn, ratatui_block_title_fn, ratatui_block_title_spans_fn,
-    ratatui_block_title_alignment_fn, FfiRect, FfiTerminal,
+    ratatui_block_adv_fn, ratatui_block_title_alignment_fn, ratatui_block_title_fn,
+    ratatui_block_title_spans_fn, FfiRect, FfiTerminal,
 };
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use ratatui::prelude::StatefulWidget;
 use ratatui::widgets::{
     Block, Scrollbar as RtScrollbar, ScrollbarOrientation as RtScrollbarOrientation,
     ScrollbarState as RtScrollbarState,
@@ -61,6 +60,7 @@ pub struct FfiScrollbar {
 }
 
 #[cfg(feature = "scrollbar")]
+#[allow(dead_code)]
 #[repr(u32)]
 pub enum FfiScrollbarOrientation {
     VerticalRight = 0,
@@ -70,6 +70,7 @@ pub enum FfiScrollbarOrientation {
 }
 
 #[cfg(feature = "scrollbar")]
+#[allow(dead_code)]
 #[repr(u32)]
 pub enum FfiScrollDirection {
     Forward = 0,

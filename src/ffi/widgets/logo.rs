@@ -5,12 +5,11 @@
 
 // use crate::*; // enable when moving implementations
 
+use crate::{FfiRect, FfiTerminal};
+use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::widgets::RatatuiLogo as RtRatatuiLogo;
 use std::ffi::{c_char, CString};
-use ratatui::buffer::Buffer;
-use ratatui::prelude::Widget;
-use crate::{FfiRect, FfiTerminal};
 
 #[no_mangle]
 pub extern "C" fn ratatui_ratatuilogo_draw_in(term: *mut FfiTerminal, rect: FfiRect) -> bool {

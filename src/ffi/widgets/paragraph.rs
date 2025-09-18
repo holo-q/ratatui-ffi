@@ -1,4 +1,9 @@
 use crate::*;
+use ratatui::buffer::Buffer;
+use ratatui::layout::Rect;
+use ratatui::prelude::{Alignment, Line, Span};
+use ratatui::style::Style;
+use ratatui::widgets::{Block, Paragraph};
 use std::ffi::CStr;
 use std::ffi::CString;
 use std::os::raw::c_char;

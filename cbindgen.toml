@@ -16,7 +16,7 @@ include = [
   "FfiLegendPosition", "FfiRenderDirection", "FfiListDirection",
   "FfiScrollbarOrientation", "FfiScrollDirection", "FfiPosition",
   "FfiMapResolution", "FfiSize", "FfiConstraint", "FfiSpacing", "FfiMarker",
-  "FfiClearType", "FfiViewport", "FfiLineSet", "FfiBorderSet", "FfiLevelSet", "FfiScrollbarSet"
+  "FfiClearType", "FfiViewport", "FfiSymbolsLineSet", "FfiSymbolsBorderSet", "FfiSymbolsBlockSet", "FfiSymbolsBarSet", "FfiSymbolsScrollbarSet"
   , "FfiU16Slice"
   , "FfiAccentedPaletteU32", "FfiNonAccentedPaletteU32", "FfiTailwindPaletteU32"
 ]

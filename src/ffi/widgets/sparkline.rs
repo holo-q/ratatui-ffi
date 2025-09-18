@@ -17,7 +17,7 @@ use crate::{
 };
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use ratatui::prelude::{Style, Widget};
+use ratatui::prelude::Style;
 use ratatui::widgets::{Block, Sparkline as RtSparkline};
 use std::ffi::{c_char, CString};
 

@@ -45,3 +45,35 @@ panic = "unwind"
 
 [profile.release]
 panic = "unwind"
+
+[package.metadata.ffi_introspect]
+# Where to emit generated FFI Rust code (symbols/palettes, etc.)
+emit_rs = "src/ffi/generated.rs"
+# Root path for referencing consts in the target crate (defaults to package name)
+const_root = "ratatui"
+# Name prefix for generated getter functions (defaults to first segment of package name)
+fn_prefix = "ratatui"
+# How to obtain target sources generically
+# If git_tag is omitted, it is derived from Cargo.lock using dep_name.
+git_url = "https://github.com/ratatui-org/ratatui.git"
+dep_name = "ratatui"
+
+# Emission filters (generic, no hardcoding required)
+# The tool will generate &str getters for public consts whose module path starts with any of these prefixes.
+symbol_namespaces = ["symbols::"]
+# "module:file" entries; semicolon-separated string is also allowed for simpler parsers.
+set_modules = "symbols::line:symbols/line.rs;symbols::border:symbols/border.rs;symbols::block:symbols.rs;symbols::bar:symbols.rs;symbols::scrollbar:symbols.rs"
+dto_enum_u32 = ["Alignment", "BorderType"]
+dto_renames = "layout::Rect=FfiRect"
+const_modules = "symbols::half_block:symbols.rs;symbols::shade:symbols.rs;symbols::braille:symbols.rs"
+
+# Macro names used by the generator (override to integrate with other projects)
+macros.struct_str = "crate::ratatui_define_ffi_str_struct!"
+macros.struct_u32 = "crate::ratatui_define_ffi_u32_struct!"
+macros.const_str_getter = "crate::ratatui_const_str_getter!"
+macros.const_char_getter = "crate::ratatui_const_char_getter!"
+macros.const_u16_getter = "crate::ratatui_const_u16_getter!"
+macros.const_struct_getter = "crate::ratatui_const_struct_getter!"
+macros.const_color_u32_getter = "crate::ratatui_const_color_u32_getter!"
+macros.const_palette_u32_getter = "crate::ratatui_const_palette_u32_getter!"
+widgets_emit_rs = "src/ffi/generated_widgets.rs"

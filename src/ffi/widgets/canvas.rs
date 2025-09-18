@@ -12,18 +12,19 @@
 
 // use crate::*; // enable when moving implementations
 
-use crossterm::event::{Event as CtEvent, KeyModifiers as CtKeyModifiers, MouseButton as CtMouseButton, MouseEvent as CtMouseEvent, MouseEventKind as CtMouseKind};
-use ratatui::prelude::{Color, Widget};
-use ratatui::widgets::Block;
-use ratatui::symbols::Marker as RtMarker;
-use ratatui::layout::Rect;
-use ratatui::widgets::canvas::{Canvas as RtCanvas, Line as RtCanvasLine, Points as RtCanvasPoints, Rectangle as RtCanvasRect};
-use std::ffi::{c_char, CString};
-use ratatui::buffer::Buffer;
 use crate::{
-    FfiKeyMods, FfiMouseKind, FfiRect, FfiSpan, FfiStyle, FfiTerminal, INJECTED_EVENTS,
-    ratatui_block_title_fn, ratatui_block_title_spans_fn, ratatui_block_title_alignment_fn,
+    ratatui_block_title_alignment_fn, ratatui_block_title_fn, ratatui_block_title_spans_fn,
+    FfiRect, FfiSpan, FfiStyle, FfiTerminal,
 };
+use ratatui::buffer::Buffer;
+use ratatui::layout::Rect;
+use ratatui::prelude::Color;
+use ratatui::symbols::Marker as RtMarker;
+use ratatui::widgets::canvas::{
+    Canvas as RtCanvas, Line as RtCanvasLine, Points as RtCanvasPoints, Rectangle as RtCanvasRect,
+};
+use ratatui::widgets::Block;
+use std::ffi::{c_char, CString};
 
 #[repr(C)]
 pub struct FfiCanvasLine {
@@ -34,6 +35,7 @@ pub struct FfiCanvasLine {
     pub style: FfiStyle,
 }
 
+#[allow(dead_code)]
 #[repr(C)]
 pub struct FfiCanvasPoints {
     pub points_xy: *const f64,

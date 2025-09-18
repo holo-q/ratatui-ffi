@@ -3,9 +3,14 @@ macro_rules! ratatui_block_title_alignment_fn {
     ($fn_name:ident, $ffi_ty:ty) => {
         #[no_mangle]
         pub extern "C" fn $fn_name(ptr: *mut $ffi_ty, align: u32) {
-            if ptr.is_null() { return; }
+            if ptr.is_null() {
+                return;
+            }
             let obj = unsafe { &mut *ptr };
-            let base = obj.block.take().unwrap_or_else(|| ratatui::widgets::Block::default());
+            let base = obj
+                .block
+                .take()
+                .unwrap_or_else(|| ratatui::widgets::Block::default());
             obj.block = Some(crate::apply_block_title_alignment(base, align));
         }
     };
@@ -26,7 +31,9 @@ macro_rules! ratatui_block_adv_fn {
             title_spans: *const crate::FfiSpan,
             title_len: usize,
         ) {
-            if ptr.is_null() { return; }
+            if ptr.is_null() {
+                return;
+            }
             let obj = unsafe { &mut *ptr };
             obj.block = Some(crate::build_block_from_adv(
                 borders_bits,
@@ -51,7 +58,10 @@ macro_rules! ratatui_const_str_getter {
         #[no_mangle]
         pub extern "C" fn $fn_name() -> crate::FfiStr {
             let s: &'static str = $path;
-            crate::FfiStr { ptr: s.as_ptr(), len: s.len() }
+            crate::FfiStr {
+                ptr: s.as_ptr(),
+                len: s.len(),
+            }
         }
     };
 }
@@ -82,7 +92,12 @@ macro_rules! ratatui_const_u16_getter {
 
 // Build an FfiStr from a &'static str
 #[inline]
-pub(crate) fn __ffi_str(s: &'static str) -> crate::FfiStr { crate::FfiStr { ptr: s.as_ptr(), len: s.len() } }
+pub(crate) fn __ffi_str(s: &'static str) -> crate::FfiStr {
+    crate::FfiStr {
+        ptr: s.as_ptr(),
+        len: s.len(),
+    }
+}
 
 // Define an FFI struct composed of FfiStr fields.
 #[macro_export]
@@ -104,7 +119,9 @@ macro_rules! ratatui_block_title_fn {
             title_utf8: *const ::std::os::raw::c_char,
             show_border: bool,
         ) {
-            if ptr.is_null() { return; }
+            if ptr.is_null() {
+                return;
+            }
             let obj = unsafe { &mut *ptr };
             let mut block = if show_border {
                 ratatui::widgets::Block::default().borders(ratatui::widgets::Borders::ALL)
@@ -133,7 +150,9 @@ macro_rules! ratatui_block_title_spans_fn {
             title_len: usize,
             show_border: bool,
         ) {
-            if ptr.is_null() { return; }
+            if ptr.is_null() {
+                return;
+            }
             let obj = unsafe { &mut *ptr };
             let mut block = if show_border {
                 ratatui::widgets::Block::default().borders(ratatui::widgets::Borders::ALL)
@@ -194,98 +213,18 @@ macro_rules! ratatui_const_palette_u32_getter {
     };
 }
 
-// line::Set -> FfiLineSet
-#[macro_export]
-macro_rules! ratatui_const_line_set_getter {
-    ($fn_name:ident, $path:path) => {
-        #[no_mangle]
-        pub extern "C" fn $fn_name() -> crate::FfiLineSet {
-            let s = $path;
-            crate::FfiLineSet {
-                vertical: $crate::ffi::macros::__ffi_str(s.vertical),
-                horizontal: $crate::ffi::macros::__ffi_str(s.horizontal),
-                top_right: $crate::ffi::macros::__ffi_str(s.top_right),
-                top_left: $crate::ffi::macros::__ffi_str(s.top_left),
-                bottom_right: $crate::ffi::macros::__ffi_str(s.bottom_right),
-                bottom_left: $crate::ffi::macros::__ffi_str(s.bottom_left),
-                vertical_left: $crate::ffi::macros::__ffi_str(s.vertical_left),
-                vertical_right: $crate::ffi::macros::__ffi_str(s.vertical_right),
-                horizontal_down: $crate::ffi::macros::__ffi_str(s.horizontal_down),
-                horizontal_up: $crate::ffi::macros::__ffi_str(s.horizontal_up),
-                cross: $crate::ffi::macros::__ffi_str(s.cross),
-            }
-        }
-    };
-}
-
-// border::Set -> FfiBorderSet
-#[macro_export]
-macro_rules! ratatui_const_border_set_getter {
-    ($fn_name:ident, $path:path) => {
-        #[no_mangle]
-        pub extern "C" fn $fn_name() -> crate::FfiBorderSet {
-            let s = $path;
-            crate::FfiBorderSet {
-                top_left: $crate::ffi::macros::__ffi_str(s.top_left),
-                top_right: $crate::ffi::macros::__ffi_str(s.top_right),
-                bottom_left: $crate::ffi::macros::__ffi_str(s.bottom_left),
-                bottom_right: $crate::ffi::macros::__ffi_str(s.bottom_right),
-                vertical_left: $crate::ffi::macros::__ffi_str(s.vertical_left),
-                vertical_right: $crate::ffi::macros::__ffi_str(s.vertical_right),
-                horizontal_top: $crate::ffi::macros::__ffi_str(s.horizontal_top),
-                horizontal_bottom: $crate::ffi::macros::__ffi_str(s.horizontal_bottom),
-            }
-        }
-    };
-}
-
-// block::Set / bar::Set -> FfiLevelSet
-#[macro_export]
-macro_rules! ratatui_const_level_set_getter {
-    ($fn_name:ident, $path:path) => {
-        #[no_mangle]
-        pub extern "C" fn $fn_name() -> crate::FfiLevelSet {
-            let s = $path;
-            crate::FfiLevelSet {
-                full: $crate::ffi::macros::__ffi_str(s.full),
-                seven_eighths: $crate::ffi::macros::__ffi_str(s.seven_eighths),
-                three_quarters: $crate::ffi::macros::__ffi_str(s.three_quarters),
-                five_eighths: $crate::ffi::macros::__ffi_str(s.five_eighths),
-                half: $crate::ffi::macros::__ffi_str(s.half),
-                three_eighths: $crate::ffi::macros::__ffi_str(s.three_eighths),
-                one_quarter: $crate::ffi::macros::__ffi_str(s.one_quarter),
-                one_eighth: $crate::ffi::macros::__ffi_str(s.one_eighth),
-                empty: $crate::ffi::macros::__ffi_str(s.empty),
-            }
-        }
-    };
-}
-
-// symbols::scrollbar::Set -> FfiScrollbarSet
-#[macro_export]
-macro_rules! ratatui_const_scrollbar_set_getter {
-    ($fn_name:ident, $path:path) => {
-        #[no_mangle]
-        pub extern "C" fn $fn_name() -> crate::FfiScrollbarSet {
-            let s = $path;
-            crate::FfiScrollbarSet {
-                track: $crate::ffi::macros::__ffi_str(s.track),
-                thumb: $crate::ffi::macros::__ffi_str(s.thumb),
-                begin: $crate::ffi::macros::__ffi_str(s.begin),
-                end: $crate::ffi::macros::__ffi_str(s.end),
-            }
-        }
-    };
-}
-
 // Reserve capacity on a Vec field inside an FFI struct
 #[macro_export]
 macro_rules! ratatui_reserve_vec_fn {
     ($fn_name:ident, $ffi_ty:ty, $field:ident) => {
         #[no_mangle]
         pub extern "C" fn $fn_name(ptr: *mut $ffi_ty, additional: usize) {
-            if ptr.is_null() { return; }
-            unsafe { (&mut *ptr).$field.reserve(additional); }
+            if ptr.is_null() {
+                return;
+            }
+            unsafe {
+                (&mut *ptr).$field.reserve(additional);
+            }
         }
     };
 }
@@ -296,8 +235,12 @@ macro_rules! ratatui_set_style_fn {
     ($fn_name:ident, $ffi_ty:ty, $field:ident) => {
         #[no_mangle]
         pub extern "C" fn $fn_name(ptr: *mut $ffi_ty, style: $crate::FfiStyle) {
-            if ptr.is_null() { return; }
-            unsafe { (&mut *ptr).$field = Some($crate::style_from_ffi(style)); }
+            if ptr.is_null() {
+                return;
+            }
+            unsafe {
+                (&mut *ptr).$field = Some($crate::style_from_ffi(style));
+            }
         }
     };
 }
@@ -308,9 +251,17 @@ macro_rules! ratatui_set_selected_i32_fn {
     ($fn_name:ident, $ffi_ty:ty, $field:ident) => {
         #[no_mangle]
         pub extern "C" fn $fn_name(ptr: *mut $ffi_ty, selected: i32) {
-            if ptr.is_null() { return; }
-            let v = if selected < 0 { None } else { Some(selected as usize) };
-            unsafe { (&mut *ptr).$field = v; }
+            if ptr.is_null() {
+                return;
+            }
+            let v = if selected < 0 {
+                None
+            } else {
+                Some(selected as usize)
+            };
+            unsafe {
+                (&mut *ptr).$field = v;
+            }
         }
     };
 }
