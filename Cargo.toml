@@ -1,6 +1,6 @@
 [package]
 name = "ratatui_ffi"
-version = "0.2.5"
+version = "0.2.6"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "C ABI bindings for Ratatui (Rust TUI) to consume from C/C#/etc."
