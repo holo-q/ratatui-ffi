@@ -81,6 +81,12 @@ pub extern "C" fn ratatui_paragraph_new(text_utf8: *const c_char) -> *mut FfiPar
         return ptr::null_mut();
     }
     let c_str = unsafe { CStr::from_ptr(text_utf8) };
+    #[cfg(feature = "ffi_safety")]
+    {
+        if !crate::ffi::safety::check_text_len(c_str.to_bytes().len()) {
+            return ptr::null_mut();
+        }
+    }
     let text = match c_str.to_str() {
         Ok(s) => s.to_owned(),
         Err(_) => return ptr::null_mut(),
@@ -124,6 +130,12 @@ pub extern "C" fn ratatui_paragraph_append_span(
     }
     let p = unsafe { &mut *para };
     let c_str = unsafe { CStr::from_ptr(text_utf8) };
+    #[cfg(feature = "ffi_safety")]
+    {
+        if !crate::ffi::safety::check_text_len(c_str.to_bytes().len()) {
+            return;
+        }
+    }
     if let Ok(s) = c_str.to_str() {
         let st = style_from_ffi(style);
         if let Some(last) = p.lines.last_mut() {
@@ -144,6 +156,12 @@ pub extern "C" fn ratatui_paragraph_append_spans(
         return;
     }
     let p = unsafe { &mut *para };
+    #[cfg(feature = "ffi_safety")]
+    {
+        if !crate::ffi::safety::check_batch_len(len) {
+            return;
+        }
+    }
     if let Some(sp) = spans_from_ffi(spans, len) {
         if let Some(last) = p.lines.last_mut() {
             last.spans.extend(sp);
@@ -163,6 +181,12 @@ pub extern "C" fn ratatui_paragraph_append_line_spans(
         return;
     }
     let p = unsafe { &mut *para };
+    #[cfg(feature = "ffi_safety")]
+    {
+        if !crate::ffi::safety::check_batch_len(len) {
+            return;
+        }
+    }
     if let Some(sp) = spans_from_ffi(spans, len) {
         p.lines.push(Line::from(sp));
     }
@@ -178,6 +202,12 @@ pub extern "C" fn ratatui_paragraph_append_lines_spans(
         return;
     }
     let p = unsafe { &mut *para };
+    #[cfg(feature = "ffi_safety")]
+    {
+        if !crate::ffi::safety::check_batch_len(len) {
+            return;
+        }
+    }
     let slice = unsafe { std::slice::from_raw_parts(lines, len) };
     for ls in slice.iter() {
         if ls.spans.is_null() || ls.len == 0 {
@@ -335,6 +365,12 @@ pub extern "C" fn ratatui_terminal_draw_paragraph_in(
         }
         if let Some(b) = &p.block {
             widget = widget.block(b.clone());
+        }
+        #[cfg(feature = "ffi_safety")]
+        {
+            if !crate::ffi::safety::check_rect_dims(rect) {
+                return false;
+            }
         }
         let res = t.terminal.draw(|frame| {
             frame.render_widget(widget.clone(), area);

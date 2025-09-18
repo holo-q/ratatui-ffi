@@ -138,6 +138,30 @@ The `ffi_introspect` tool drives coverage and optional code generation directly 
   - The library includes `include!("ffi/generated.rs")` so getters are compiled into the cdylib.
   - Commit generated files so consumers don’t need the tool at runtime.
 
+### Safety Checks (optional)
+
+For QA and development, you can compile additional input‑validation guards into the FFI layer.
+
+- Feature: `ffi_safety` (disabled by default)
+  - Build with: `cargo build --features ffi_safety`
+  - Adds lightweight validation at FFI boundaries and a small control API.
+  - Default builds remain zero‑overhead — no checks or safety symbols are compiled.
+
+- Runtime control (only available when built with `ffi_safety`):
+  - `void ratatui_ffi_set_safety(bool enabled)` — enable/disable checks at runtime.
+  - `void ratatui_ffi_set_caps(u16 max_w, u16 max_h, u32 max_area, u32 max_text_len, u32 max_batch)` — tune caps.
+  - `FfiStr ratatui_ffi_last_error()` / `void ratatui_ffi_clear_last_error()` — observe/clear the last safety error.
+
+- What is validated today
+  - Draw rectangles: dimension and viewport sanity in renderer and per‑widget draw_in paths.
+  - Lists: per‑item UTF‑8 length cap; batch length cap; selected/offset clamped to item count.
+  - Paragraphs: per‑item UTF‑8 length cap; batch length cap; rect sanity in draw_in.
+  - Tables: rect sanity in both stateful and stateless draw_in.
+
+- Recommended usage for bindings
+  - Ship two artifacts if you prefer (with/without `ffi_safety`), or ask advanced users to build from submodule.
+  - In debug/QA builds of the `ffi_safety` artifact, call `ratatui_ffi_set_safety(true)` at startup and optionally set caps. In release, leave safety disabled.
+
 ### C Header Generation
 
 This crate exposes a C ABI and ships a cbindgen config to generate a header for C/C++ consumers.

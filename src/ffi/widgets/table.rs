@@ -256,6 +256,12 @@ pub extern "C" fn ratatui_terminal_draw_table_state_in(
             width: rect.width,
             height: rect.height,
         };
+        #[cfg(feature = "ffi_safety")]
+        {
+            if !crate::ffi::safety::check_rect_dims(rect) {
+                return false;
+            }
+        }
         let header_row = if let Some(hs) = &tb.headers_spans {
             let mut r = Row::new(hs.iter().cloned().map(Cell::from).collect::<Vec<_>>());
             if let Some(hsty) = &tb.header_style {
@@ -603,6 +609,12 @@ pub extern "C" fn ratatui_terminal_draw_table_in(
             width: rect.width,
             height: rect.height,
         };
+        #[cfg(feature = "ffi_safety")]
+        {
+            if !crate::ffi::safety::check_rect_dims(rect) {
+                return false;
+            }
+        }
         // build rows via headless logic
         let header_row = if let Some(hs) = &tb.headers_spans {
             Some(Row::new(
