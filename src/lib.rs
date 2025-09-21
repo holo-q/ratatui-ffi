@@ -13,6 +13,7 @@ use crossterm::event::{
 use ratatui::backend::CrosstermBackend;
 use ratatui::prelude::*;
 mod ffi;
+mod custom; // project-specific extension APIs kept separate from core ffi module
 #[allow(unused_imports)]
 pub use crate::ffi::types::*;
 #[allow(unused_imports)]
