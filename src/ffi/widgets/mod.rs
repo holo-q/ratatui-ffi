@@ -7,6 +7,7 @@ pub mod layout;
 pub mod linegauge;
 pub mod list;
 pub mod logo;
+pub mod mascot;
 pub mod paragraph;
 pub mod scrollbar;
 pub mod sparkline;

@@ -107,7 +107,6 @@ ratatui_const_str_getter!(ratatui_border_get_one_eighth_right_eight, rt::symbols
 ratatui_const_char_getter!(ratatui_half_block_get_upper, rt::symbols::half_block::UPPER);
 ratatui_const_char_getter!(ratatui_half_block_get_lower, rt::symbols::half_block::LOWER);
 ratatui_const_char_getter!(ratatui_half_block_get_full, rt::symbols::half_block::FULL);
-ratatui_const_u16_getter!(ratatui_braille_get_blank, rt::symbols::braille::BLANK);
 ratatui_define_ffi_str_struct!(FfiSymbolsLineSet: vertical, horizontal, top_right, top_left, bottom_right, bottom_left, vertical_left, vertical_right, horizontal_down, horizontal_up, cross);
 ratatui_const_struct_getter!(ratatui_line_get_normal, FfiSymbolsLineSet, rt::symbols::line::NORMAL , [vertical, horizontal, top_right, top_left, bottom_right, bottom_left, vertical_left, vertical_right, horizontal_down, horizontal_up, cross]);
 ratatui_const_struct_getter!(ratatui_line_get_rounded, FfiSymbolsLineSet, rt::symbols::line::ROUNDED , [vertical, horizontal, top_right, top_left, bottom_right, bottom_left, vertical_left, vertical_right, horizontal_down, horizontal_up, cross]);

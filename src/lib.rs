@@ -495,7 +495,12 @@ bitflags::bitflags! {
     }
 }
 
-const __RATATUI_BRAILLE_DOTS: [[u16; 2]; 4] = symbols::braille::DOTS;
+// ratatui 0.30 removed the public `symbols::braille::{BLANK,DOTS}` consts (the
+// braille module now exposes only the BRAILLE[256] char table). The 2x4 dot-bit
+// layout is a fixed Unicode standard (U+2800 base + these per-dot bit offsets),
+// so we inline it — row-major, matching the flattening below.
+const __RATATUI_BRAILLE_DOTS: [[u16; 2]; 4] =
+    [[0x0001, 0x0008], [0x0002, 0x0010], [0x0004, 0x0020], [0x0040, 0x0080]];
 const __RATATUI_BRAILLE_DOTS_FLAT: [u16; 8] = [
     __RATATUI_BRAILLE_DOTS[0][0],
     __RATATUI_BRAILLE_DOTS[0][1],

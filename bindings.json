@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "ffi_version": "0.2.6",
-  "ratatui_version": "0.29",
+  "ratatui_version": "0.30",
   "functions": [
     {
       "name": "ratatui_bar_get_nine_levels",
@@ -718,14 +718,6 @@
         "kind": "struct",
         "name": "FfiSymbolsBorderSet",
         "opaque": false
-      }
-    },
-    {
-      "name": "ratatui_braille_get_blank",
-      "params": [],
-      "ret": {
-        "kind": "prim",
-        "name": "u16"
       }
     },
     {
@@ -3182,6 +3174,50 @@
         },
         {
           "name": "size",
+          "type": {
+            "kind": "prim",
+            "name": "u32"
+          }
+        },
+        {
+          "name": "out_text_utf8",
+          "type": {
+            "kind": "ptr",
+            "mutable": true,
+            "elem": {
+              "kind": "ptr",
+              "mutable": true,
+              "elem": {
+                "kind": "char"
+              }
+            }
+          }
+        }
+      ],
+      "ret": {
+        "kind": "prim",
+        "name": "bool"
+      }
+    },
+    {
+      "name": "ratatui_headless_render_ratatuimascot",
+      "params": [
+        {
+          "name": "width",
+          "type": {
+            "kind": "prim",
+            "name": "u16"
+          }
+        },
+        {
+          "name": "height",
+          "type": {
+            "kind": "prim",
+            "name": "u16"
+          }
+        },
+        {
+          "name": "eye",
           "type": {
             "kind": "prim",
             "name": "u32"
@@ -6277,6 +6313,42 @@
         },
         {
           "name": "size",
+          "type": {
+            "kind": "prim",
+            "name": "u32"
+          }
+        }
+      ],
+      "ret": {
+        "kind": "prim",
+        "name": "bool"
+      }
+    },
+    {
+      "name": "ratatui_ratatuimascot_draw_in",
+      "params": [
+        {
+          "name": "term",
+          "type": {
+            "kind": "ptr",
+            "mutable": true,
+            "elem": {
+              "kind": "struct",
+              "name": "FfiTerminal",
+              "opaque": true
+            }
+          }
+        },
+        {
+          "name": "rect",
+          "type": {
+            "kind": "struct",
+            "name": "FfiRect",
+            "opaque": false
+          }
+        },
+        {
+          "name": "eye",
           "type": {
             "kind": "prim",
             "name": "u32"
@@ -11097,6 +11169,20 @@
         {
           "name": "HalfBlock",
           "value": 4
+        }
+      ]
+    },
+    {
+      "name": "FfiMascotEye",
+      "repr": "u32",
+      "variants": [
+        {
+          "name": "Default",
+          "value": 0
+        },
+        {
+          "name": "Red",
+          "value": 1
         }
       ]
     },
