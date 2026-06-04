@@ -4,20 +4,74 @@
   "ratatui_version": "0.30",
   "functions": [
     {
-      "name": "ratatui_bar_get_nine_levels",
+      "name": "ratatui_bar_get_five_eighths",
       "params": [],
       "ret": {
         "kind": "struct",
-        "name": "FfiSymbolsBarSet",
+        "name": "FfiStr",
         "opaque": false
       }
     },
     {
-      "name": "ratatui_bar_get_three_levels",
+      "name": "ratatui_bar_get_full",
       "params": [],
       "ret": {
         "kind": "struct",
-        "name": "FfiSymbolsBarSet",
+        "name": "FfiStr",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_bar_get_half",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiStr",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_bar_get_one_eighth",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiStr",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_bar_get_one_quarter",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiStr",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_bar_get_seven_eighths",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiStr",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_bar_get_three_eighths",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiStr",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_bar_get_three_quarters",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiStr",
         "opaque": false
       }
     },
@@ -424,20 +478,74 @@
       }
     },
     {
-      "name": "ratatui_block_get_nine_levels",
+      "name": "ratatui_block_get_five_eighths",
       "params": [],
       "ret": {
         "kind": "struct",
-        "name": "FfiSymbolsBlockSet",
+        "name": "FfiStr",
         "opaque": false
       }
     },
     {
-      "name": "ratatui_block_get_three_levels",
+      "name": "ratatui_block_get_full",
       "params": [],
       "ret": {
         "kind": "struct",
-        "name": "FfiSymbolsBlockSet",
+        "name": "FfiStr",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_block_get_half",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiStr",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_block_get_one_eighth",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiStr",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_block_get_one_quarter",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiStr",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_block_get_seven_eighths",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiStr",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_block_get_three_eighths",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiStr",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_block_get_three_quarters",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiStr",
         "opaque": false
       }
     },
@@ -461,6 +569,60 @@
     },
     {
       "name": "ratatui_border_get_full",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiSymbolsBorderSet",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_border_get_heavy_double_dashed",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiSymbolsBorderSet",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_border_get_heavy_quadruple_dashed",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiSymbolsBorderSet",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_border_get_heavy_triple_dashed",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiSymbolsBorderSet",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_border_get_light_double_dashed",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiSymbolsBorderSet",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_border_get_light_quadruple_dashed",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiSymbolsBorderSet",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_border_get_light_triple_dashed",
       "params": [],
       "ret": {
         "kind": "struct",
@@ -2425,30 +2587,6 @@
       }
     },
     {
-      "name": "ratatui_half_block_get_full",
-      "params": [],
-      "ret": {
-        "kind": "prim",
-        "name": "u32"
-      }
-    },
-    {
-      "name": "ratatui_half_block_get_lower",
-      "params": [],
-      "ret": {
-        "kind": "prim",
-        "name": "u32"
-      }
-    },
-    {
-      "name": "ratatui_half_block_get_upper",
-      "params": [],
-      "ret": {
-        "kind": "prim",
-        "name": "u32"
-      }
-    },
-    {
       "name": "ratatui_headless_render_barchart",
       "params": [
         {
@@ -4025,6 +4163,87 @@
       }
     },
     {
+      "name": "ratatui_line_get_heavy_double_dash_horizontal",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiStr",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_line_get_heavy_double_dash_vertical",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiStr",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_line_get_heavy_double_dashed",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiSymbolsLineSet",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_line_get_heavy_quadruple_dash_horizontal",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiStr",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_line_get_heavy_quadruple_dash_vertical",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiStr",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_line_get_heavy_quadruple_dashed",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiSymbolsLineSet",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_line_get_heavy_triple_dash_horizontal",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiStr",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_line_get_heavy_triple_dash_vertical",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiStr",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_line_get_heavy_triple_dashed",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiSymbolsLineSet",
+        "opaque": false
+      }
+    },
+    {
       "name": "ratatui_line_get_horizontal",
       "params": [],
       "ret": {
@@ -4048,6 +4267,87 @@
       "ret": {
         "kind": "struct",
         "name": "FfiStr",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_line_get_light_double_dash_horizontal",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiStr",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_line_get_light_double_dash_vertical",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiStr",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_line_get_light_double_dashed",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiSymbolsLineSet",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_line_get_light_quadruple_dash_horizontal",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiStr",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_line_get_light_quadruple_dash_vertical",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiStr",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_line_get_light_quadruple_dashed",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiSymbolsLineSet",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_line_get_light_triple_dash_horizontal",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiStr",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_line_get_light_triple_dash_vertical",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiStr",
+        "opaque": false
+      }
+    },
+    {
+      "name": "ratatui_line_get_light_triple_dashed",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiSymbolsLineSet",
         "opaque": false
       }
     },
@@ -5224,6 +5524,15 @@
       ],
       "ret": {
         "kind": "void"
+      }
+    },
+    {
+      "name": "ratatui_marker_get_dot",
+      "params": [],
+      "ret": {
+        "kind": "struct",
+        "name": "FfiStr",
+        "opaque": false
       }
     },
     {
@@ -6426,42 +6735,6 @@
       ],
       "ret": {
         "kind": "void"
-      }
-    },
-    {
-      "name": "ratatui_scrollbar_get_double_horizontal",
-      "params": [],
-      "ret": {
-        "kind": "struct",
-        "name": "FfiSymbolsScrollbarSet",
-        "opaque": false
-      }
-    },
-    {
-      "name": "ratatui_scrollbar_get_double_vertical",
-      "params": [],
-      "ret": {
-        "kind": "struct",
-        "name": "FfiSymbolsScrollbarSet",
-        "opaque": false
-      }
-    },
-    {
-      "name": "ratatui_scrollbar_get_horizontal",
-      "params": [],
-      "ret": {
-        "kind": "struct",
-        "name": "FfiSymbolsScrollbarSet",
-        "opaque": false
-      }
-    },
-    {
-      "name": "ratatui_scrollbar_get_vertical",
-      "params": [],
-      "ret": {
-        "kind": "struct",
-        "name": "FfiSymbolsScrollbarSet",
-        "opaque": false
       }
     },
     {
@@ -10163,160 +10436,6 @@
       ]
     },
     {
-      "name": "FfiSymbolsBarSet",
-      "fields": [
-        {
-          "name": "full",
-          "type": {
-            "kind": "struct",
-            "name": "FfiStr",
-            "opaque": false
-          }
-        },
-        {
-          "name": "seven_eighths",
-          "type": {
-            "kind": "struct",
-            "name": "FfiStr",
-            "opaque": false
-          }
-        },
-        {
-          "name": "three_quarters",
-          "type": {
-            "kind": "struct",
-            "name": "FfiStr",
-            "opaque": false
-          }
-        },
-        {
-          "name": "five_eighths",
-          "type": {
-            "kind": "struct",
-            "name": "FfiStr",
-            "opaque": false
-          }
-        },
-        {
-          "name": "half",
-          "type": {
-            "kind": "struct",
-            "name": "FfiStr",
-            "opaque": false
-          }
-        },
-        {
-          "name": "three_eighths",
-          "type": {
-            "kind": "struct",
-            "name": "FfiStr",
-            "opaque": false
-          }
-        },
-        {
-          "name": "one_quarter",
-          "type": {
-            "kind": "struct",
-            "name": "FfiStr",
-            "opaque": false
-          }
-        },
-        {
-          "name": "one_eighth",
-          "type": {
-            "kind": "struct",
-            "name": "FfiStr",
-            "opaque": false
-          }
-        },
-        {
-          "name": "empty",
-          "type": {
-            "kind": "struct",
-            "name": "FfiStr",
-            "opaque": false
-          }
-        }
-      ]
-    },
-    {
-      "name": "FfiSymbolsBlockSet",
-      "fields": [
-        {
-          "name": "full",
-          "type": {
-            "kind": "struct",
-            "name": "FfiStr",
-            "opaque": false
-          }
-        },
-        {
-          "name": "seven_eighths",
-          "type": {
-            "kind": "struct",
-            "name": "FfiStr",
-            "opaque": false
-          }
-        },
-        {
-          "name": "three_quarters",
-          "type": {
-            "kind": "struct",
-            "name": "FfiStr",
-            "opaque": false
-          }
-        },
-        {
-          "name": "five_eighths",
-          "type": {
-            "kind": "struct",
-            "name": "FfiStr",
-            "opaque": false
-          }
-        },
-        {
-          "name": "half",
-          "type": {
-            "kind": "struct",
-            "name": "FfiStr",
-            "opaque": false
-          }
-        },
-        {
-          "name": "three_eighths",
-          "type": {
-            "kind": "struct",
-            "name": "FfiStr",
-            "opaque": false
-          }
-        },
-        {
-          "name": "one_quarter",
-          "type": {
-            "kind": "struct",
-            "name": "FfiStr",
-            "opaque": false
-          }
-        },
-        {
-          "name": "one_eighth",
-          "type": {
-            "kind": "struct",
-            "name": "FfiStr",
-            "opaque": false
-          }
-        },
-        {
-          "name": "empty",
-          "type": {
-            "kind": "struct",
-            "name": "FfiStr",
-            "opaque": false
-          }
-        }
-      ]
-    },
-    {
       "name": "FfiSymbolsBorderSet",
       "fields": [
         {
@@ -10470,43 +10589,6 @@
         },
         {
           "name": "cross",
-          "type": {
-            "kind": "struct",
-            "name": "FfiStr",
-            "opaque": false
-          }
-        }
-      ]
-    },
-    {
-      "name": "FfiSymbolsScrollbarSet",
-      "fields": [
-        {
-          "name": "track",
-          "type": {
-            "kind": "struct",
-            "name": "FfiStr",
-            "opaque": false
-          }
-        },
-        {
-          "name": "thumb",
-          "type": {
-            "kind": "struct",
-            "name": "FfiStr",
-            "opaque": false
-          }
-        },
-        {
-          "name": "begin",
-          "type": {
-            "kind": "struct",
-            "name": "FfiStr",
-            "opaque": false
-          }
-        },
-        {
-          "name": "end",
           "type": {
             "kind": "struct",
             "name": "FfiStr",
